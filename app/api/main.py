@@ -1,0 +1,262 @@
+"""FastAPI app: streaming chat (SSE), health, metrics.
+
+    uv run uvicorn app.api.main:app --port 7860
+
+SSE events sent by POST /chat, in order:
+    mode        {"mode", "target_date"}            detected mode (planning / in_park / general)
+    tool_start  {"id", "name", "args"}              a tool is running
+    tool_end    {"id", "name", "ok", "duration_ms"}
+    token       {"text"}                            a piece of the answer
+    done        {"thread_id", "mode", "tools", "latency_ms", "fallback", ...}
+    error       {"message"}                         unexpected failure (answer incomplete)
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Any
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, StreamingResponse
+from langchain_core.messages import AIMessage, HumanMessage
+from pydantic import BaseModel, Field
+
+from app.api.limits import DailyCap, RateLimiter, ThreadRegistry
+from app.clock import now_paris
+from app.config import Settings, get_settings
+from app.observability import Metrics, RequestTrace, langfuse_callbacks, setup_logging
+
+log = logging.getLogger(__name__)
+
+STATIC_DIR = Path(__file__).parent / "static"
+SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+
+RATE_LIMIT_MESSAGE = (
+    "Doucement 🙂 Trop de messages en une minute. Réessaie dans {seconds} secondes."
+)
+DAILY_CAP_MESSAGE = (
+    "Park Copilot a atteint sa limite de conversations pour aujourd'hui (quota gratuit). "
+    "Reviens demain !"
+)
+NOT_CONFIGURED_MESSAGE = "Le service d'IA n'est pas configuré (clé API manquante)."
+ERROR_MESSAGE = "Une erreur inattendue est survenue. Réessaie dans un instant."
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=2000)
+    thread_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def sse(event: str, data: dict[str, Any]) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False, default=str)}\n\n"
+
+
+def client_ip(request: Request) -> str:
+    # Behind the Hugging Face proxy the real client is the first X-Forwarded-For entry.
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _warmup() -> None:
+    """Pay the slow first calls (embedding model load, MongoDB TLS handshake) at startup,
+    not during a visitor's first question."""
+    from app.rag.index import get_guide_index
+    from app.tools.history import get_history_store
+
+    for name, step in [
+        ("guide index", get_guide_index),
+        ("mongodb", lambda: get_history_store().coverage()),
+    ]:
+        try:
+            step()
+            log.info("warmup ok: %s", name)
+        except Exception as exc:  # the tools report the problem cleanly later on
+            log.warning("warmup failed: %s: %r", name, exc)
+
+
+def create_app(
+    *, settings: Settings | None = None, graph: Any | None = None, warmup: bool = True
+) -> FastAPI:
+    settings = settings or get_settings()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        setup_logging(settings.log_level)
+        if app.state.graph is None:
+            app.state.graph = _build_default_graph(settings)
+        if warmup:
+            # Background: the port opens immediately (Hugging Face waits for it).
+            app.state.warmup = asyncio.create_task(asyncio.to_thread(_warmup))
+        yield
+
+    app = FastAPI(title="Park Copilot", version="0.1.0", lifespan=lifespan)
+    app.state.graph = graph
+    app.state.metrics = Metrics()
+    limiter = RateLimiter(settings.rate_limit_per_minute)
+    daily_cap = DailyCap(settings.daily_request_cap)
+    threads = ThreadRegistry(settings.max_threads)
+    callbacks = langfuse_callbacks(settings)
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.allowed_origins,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type"],
+    )
+
+    # ------------------------------------------------------------------ routes
+
+    @app.get("/health")
+    async def health() -> dict:
+        """Liveness probe and keep-alive target: touches neither the LLM nor MongoDB."""
+        return {"status": "ok"}
+
+    @app.get("/metrics")
+    async def metrics() -> dict:
+        snapshot = app.state.metrics.snapshot()
+        snapshot["history_days"] = await _history_days()
+        snapshot["llm"] = {
+            "primary": f"{settings.llm_provider}:{settings.llm_model}",
+            "fallback": f"{settings.fallback_provider}:{settings.fallback_model}",
+        }
+        return snapshot
+
+    @app.get("/", include_in_schema=False)
+    async def index() -> FileResponse:
+        return FileResponse(STATIC_DIR / "index.html")
+
+    @app.post("/chat")
+    async def chat(body: ChatRequest, request: Request) -> StreamingResponse:
+        thread_id = body.thread_id or uuid.uuid4().hex
+        trace = RequestTrace(thread_id)
+
+        allowed, retry_in = limiter.hit(client_ip(request))
+        if not allowed:
+            text = RATE_LIMIT_MESSAGE.format(seconds=retry_in)
+            return _message_response(text, trace, "rate_limited", app.state.metrics)
+        if app.state.graph is None:
+            return _message_response(NOT_CONFIGURED_MESSAGE, trace, "error", app.state.metrics)
+        if not daily_cap.try_acquire(now_paris().date()):
+            return _message_response(DAILY_CAP_MESSAGE, trace, "daily_cap", app.state.metrics)
+
+        for old_thread in threads.touch(thread_id):
+            app.state.graph.checkpointer.delete_thread(old_thread)
+
+        stream = _stream_agent(app.state.graph, body.message, trace, callbacks, app.state.metrics)
+        return StreamingResponse(stream, media_type="text/event-stream", headers=SSE_HEADERS)
+
+    return app
+
+
+def _build_default_graph(settings: Settings):
+    from app.agent.graph import build_graph
+    from app.llm import LLMUnavailable, build_router
+
+    try:
+        return build_graph(build_router(settings), max_iterations=settings.agent_max_iterations)
+    except LLMUnavailable as exc:
+        log.error("agent disabled: %s", exc)
+        return None
+
+
+async def _history_days() -> int | None:
+    from app.tools.history import get_history_store
+
+    try:
+        coverage = await asyncio.wait_for(
+            asyncio.to_thread(lambda: get_history_store().coverage()), timeout=5
+        )
+        return coverage.days
+    except Exception:
+        return None
+
+
+def _message_response(
+    text: str, trace: RequestTrace, status: str, metrics: Metrics
+) -> StreamingResponse:
+    """A limit or configuration problem is answered like a normal chat message (HTTP 200):
+    the chat widget just displays it, no special error handling needed."""
+
+    async def stream() -> AsyncIterator[str]:
+        yield sse("token", {"text": text})
+        trace.finish(status)
+        metrics.record(trace)
+        yield sse("done", {"thread_id": trace.thread_id, "limited": status})
+
+    return StreamingResponse(stream(), media_type="text/event-stream", headers=SSE_HEADERS)
+
+
+async def _stream_agent(
+    graph, message: str, trace: RequestTrace, callbacks: list, metrics: Metrics
+) -> AsyncIterator[str]:
+    config = {
+        "configurable": {"thread_id": trace.thread_id},
+        "recursion_limit": 30,  # safety net on top of the agent's own iteration limit
+        "callbacks": callbacks,
+        "metadata": {"langfuse_session_id": trace.thread_id},
+    }
+    answer: list[str] = []
+    status, error = "ok", None
+    try:
+        stream = graph.astream(
+            {"messages": [HumanMessage(message)]}, config, stream_mode=["messages", "custom"]
+        )
+        async for kind, payload in stream:
+            if kind == "custom":
+                trace.observe(payload)
+                event = {k: v for k, v in payload.items() if k != "type"}
+                if payload["type"] in ("mode", "tool_start", "tool_end"):
+                    yield sse(payload["type"], event)
+                if payload["type"] == "tool_start":
+                    answer.clear()  # text written before calling tools was only a preamble
+                continue
+            chunk, meta = payload
+            # Only the agent node writes the answer (detect_mode also calls the LLM).
+            if meta.get("langgraph_node") != "agent" or not isinstance(chunk, AIMessage):
+                continue
+            if isinstance(chunk.content, str) and chunk.content:
+                answer.append(chunk.content)
+                yield sse("token", {"text": chunk.content})
+
+        if not answer:
+            # Messages created without a streaming LLM call (e.g. "service saturé").
+            last = (await graph.aget_state(config)).values["messages"][-1]
+            if isinstance(last, AIMessage) and isinstance(last.content, str) and last.content:
+                yield sse("token", {"text": last.content})
+
+        trace.finish()
+        yield sse(
+            "done",
+            {
+                "thread_id": trace.thread_id,
+                "mode": trace.mode,
+                "target_date": trace.target_date,
+                "tools": [t.name for t in trace.tools],
+                "providers": trace.providers,
+                "fallback": trace.fallback,
+                "latency_ms": trace.latency_ms,
+            },
+        )
+    except asyncio.CancelledError:  # client closed the connection
+        status, error = "error", "client disconnected"
+        raise
+    except Exception as exc:
+        log.exception("chat failed")
+        status, error = "error", repr(exc)
+        yield sse("error", {"message": ERROR_MESSAGE})
+    finally:
+        if trace.latency_ms is None or status == "error":
+            trace.finish(status, error)
+        metrics.record(trace)
+
+
+app = create_app()

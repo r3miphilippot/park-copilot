@@ -8,10 +8,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # All "human" times (weekday, hour, opening hours, planning vs in-park mode) are Paris time.
 # Timestamps are stored in UTC and converted with this zone.
@@ -58,6 +59,32 @@ class Settings(BaseSettings):
     llm_timeout_s: float = 30.0
     llm_max_retry_wait_s: float = 5.0  # wait for `retry-after` only when it is this short
     agent_max_iterations: int = 6  # LLM calls per user message before forcing an answer
+
+    # API
+    # Comma-separated in the environment: ALLOWED_ORIGINS=https://a.com,http://localhost:3000
+    allowed_origins: Annotated[list[str], NoDecode] = [
+        "https://remiphilippot.vercel.app",
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:7860",
+    ]
+    rate_limit_per_minute: int = 10  # per client IP, on /chat
+    # Protects the Groq free quota (~1000 requests/day/model, each chat = 3-4 LLM calls).
+    daily_request_cap: int = 200
+    max_threads: int = 500  # conversations kept in memory (oldest evicted first)
+    log_level: str = "INFO"
+
+    # Observability: Langfuse (free cloud tier) is enabled only when both keys are set.
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_base_url: str = "https://cloud.langfuse.com"
+
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
+    def _split_origins(cls, value):
+        if isinstance(value, str):
+            return [origin.strip() for origin in value.split(",") if origin.strip()]
+        return value
 
     # RAG: local embeddings (FastEmbed, no API) + in-memory Chroma rebuilt at startup.
     # Multilingual model because the guide and the questions are in French.

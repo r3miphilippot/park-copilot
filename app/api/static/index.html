@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Park Copilot</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #667085; --border: #e3e6eb;
+    --accent: #3b5bdb; --user: #3b5bdb; --user-text: #ffffff; --chip: #eef1f6; --ok: #2f9e44; --err: #e03131;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151c; --panel: #1a1f29; --text: #e6e9ef; --muted: #98a2b3; --border: #2a3140;
+      --accent: #7c95ff; --user: #3b5bdb; --user-text: #ffffff; --chip: #242b38; --ok: #51cf66; --err: #ff6b6b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; padding: 16px; }
+  header h1 { font-size: 20px; margin: 8px 0 2px; }
+  header p { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
+  #log { flex: 1; display: flex; flex-direction: column; gap: 12px; padding: 8px 0 16px; }
+  .msg { padding: 10px 14px; border-radius: 14px; max-width: 92%; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .user { align-self: flex-end; background: var(--user); color: var(--user-text); border-bottom-right-radius: 4px; }
+  .bot { align-self: flex-start; background: var(--panel); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+  .chip { font-size: 12px; background: var(--chip); color: var(--muted); padding: 2px 8px; border-radius: 999px; }
+  .chip.ok::after { content: " ✓"; color: var(--ok); }
+  .chip.err::after { content: " ✗"; color: var(--err); }
+  .chip.run::after { content: " …"; }
+  .suggestions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  .suggestions button { font: inherit; font-size: 13px; background: var(--panel); color: var(--text);
+                        border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+  form { display: flex; gap: 8px; position: sticky; bottom: 0; background: var(--bg); padding: 8px 0; }
+  textarea { flex: 1; resize: none; font: inherit; color: var(--text); background: var(--panel);
+             border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; min-height: 44px; }
+  button.send { font: inherit; background: var(--accent); color: #fff; border: 0; border-radius: 12px; padding: 0 18px; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  footer { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 0 4px; }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Park Copilot</h1>
+    <p>Assistant IA pour organiser ta journée dans les deux parcs de Disneyland Paris.</p>
+  </header>
+
+  <div class="suggestions" id="suggestions">
+    <button type="button">Je viens samedi avec des enfants, un programme ?</button>
+    <button type="button">Qu'est-ce qui est calme en ce moment ?</button>
+    <button type="button">Quelles attractions faire s'il pleut ?</button>
+  </div>
+
+  <div id="log" aria-live="polite"></div>
+
+  <form id="form">
+    <textarea id="input" rows="1" placeholder="Pose ta question…" maxlength="2000" required></textarea>
+    <button class="send" id="send" type="submit">Envoyer</button>
+  </form>
+
+  <footer>
+    Temps d'attente : <a href="https://queue-times.com/" target="_blank" rel="noopener">Powered by Queue-Times.com</a>
+    (données non officielles) · Météo : <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a>
+  </footer>
+</main>
+
+<script>
+const TOOL_LABELS = {
+  get_live_wait_times: "Temps live",
+  get_typical_wait: "Attentes habituelles",
+  compare_live_vs_typical: "Live vs habituel",
+  get_weather: "Météo",
+  search_park_guide: "Guide",
+};
+const MODE_LABELS = { planning: "Planification", in_park: "Au parc", general: "Question générale" };
+
+const log = document.getElementById("log");
+const form = document.getElementById("form");
+const input = document.getElementById("input");
+const send = document.getElementById("send");
+
+let threadId = null;
+try { threadId = sessionStorage.getItem("thread_id"); } catch (_) {}
+
+function el(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text) node.textContent = text;
+  return node;
+}
+
+// Minimal, safe markdown: escape HTML first, then **bold**.
+function render(text) {
+  const escaped = text.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  return escaped.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+}
+
+async function ask(message) {
+  document.getElementById("suggestions").hidden = true;
+  log.append(el("div", "msg user", message));
+  const bot = el("div", "msg bot");
+  const meta = el("div", "meta");
+  const body = el("div");
+  bot.append(meta, body);
+  log.append(bot);
+  send.disabled = true;
+
+  let text = "";
+  const chips = {};
+  try {
+    const response = await fetch("chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message, thread_id: threadId }),
+    });
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let sep;
+      while ((sep = buffer.indexOf("\n\n")) >= 0) {       // one SSE event per blank line
+        const raw = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+        const event = /^event: (.*)$/m.exec(raw)?.[1];
+        const data = JSON.parse(/^data: (.*)$/m.exec(raw)?.[1] || "{}");
+        if (event === "mode") {
+          meta.append(el("span", "chip", MODE_LABELS[data.mode] || data.mode));
+        } else if (event === "tool_start") {
+          chips[data.id] = el("span", "chip run", TOOL_LABELS[data.name] || data.name);
+          meta.append(chips[data.id]);
+        } else if (event === "tool_end" && chips[data.id]) {
+          chips[data.id].className = "chip " + (data.ok ? "ok" : "err");
+        } else if (event === "token") {
+          text += data.text;
+          body.innerHTML = render(text);
+        } else if (event === "done") {
+          threadId = data.thread_id;
+          try { sessionStorage.setItem("thread_id", threadId); } catch (_) {}
+        } else if (event === "error") {
+          body.innerHTML = render(text + "\n\n⚠️ " + data.message);
+        }
+        window.scrollTo(0, document.body.scrollHeight);
+      }
+    }
+  } catch (err) {
+    body.textContent = "⚠️ Impossible de joindre le serveur.";
+  } finally {
+    send.disabled = false;
+    input.focus();
+  }
+}
+
+form.addEventListener("submit", e => {
+  e.preventDefault();
+  const message = input.value.trim();
+  if (!message || send.disabled) return;
+  input.value = "";
+  ask(message);
+});
+input.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); }
+});
+document.querySelectorAll("#suggestions button").forEach(b => b.addEventListener("click", () => ask(b.textContent)));
+</script>
+</body>
+</html>
