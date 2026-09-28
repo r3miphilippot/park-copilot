@@ -1,0 +1,66 @@
+name: Deploy to Hugging Face
+
+# Runs after a successful CI on main: only tested code reaches the Space.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_SPACE: ${{ vars.HF_SPACE }} # e.g. "your-username/park-copilot"
+    steps:
+      - name: Check configuration
+        run: |
+          if [ -z "$HF_TOKEN" ] || [ -z "$HF_SPACE" ]; then
+            echo "::error::Set the HF_TOKEN secret and the HF_SPACE variable in the repo settings"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      # The Space reads its settings from a YAML header in README.md. It is added only in
+      # the copy pushed to Hugging Face, so the GitHub README stays clean.
+      - name: Add the Space header to README.md
+        run: |
+          {
+            echo "---"
+            echo "title: Park Copilot"
+            echo "emoji: 🎢"
+            echo "colorFrom: indigo"
+            echo "colorTo: purple"
+            echo "sdk: docker"
+            echo "app_port: 7860"
+            echo "pinned: false"
+            echo "short_description: AI agent that plans your day at Disneyland Paris"
+            echo "---"
+            echo
+            cat README.md
+          } > README.space.md
+          mv README.space.md README.md
+
+      # A single fresh commit: the Space only needs the current code, not the history.
+      - name: Push to the Space
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git checkout --orphan space
+          git add -A
+          git commit -m "Deploy ${GITHUB_SHA::7} from GitHub"
+          git push --force "https://user:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}" space:main

@@ -1,0 +1,13 @@
+.git
+.github
+.venv
+.env
+.env.*
+**/__pycache__
+.pytest_cache
+.ruff_cache
+.fastembed_cache
+chroma_db
+tests
+evals
+collector
