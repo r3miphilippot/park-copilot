@@ -1,0 +1,23 @@
+{
+  "lands": [
+    {
+      "id": 17,
+      "name": "Adventureland",
+      "rides": [
+        {"id": 3, "name": "Pirates of the Caribbean", "is_open": true, "wait_time": 25, "last_updated": "2026-07-14T08:25:00.000Z"},
+        {"id": 2702, "name": "Adventure Isle", "is_open": false, "wait_time": 0, "last_updated": "2026-07-14T08:25:00.000Z"}
+      ]
+    },
+    {
+      "id": 18,
+      "name": "Discoveryland",
+      "rides": [
+        {"id": 5, "name": "Buzz Lightyear Laser Blast", "is_open": true, "wait_time": 40, "last_updated": "2026-07-14T08:25:00.000Z"}
+      ]
+    }
+  ],
+  "rides": [
+    {"id": 5, "name": "Buzz Lightyear Laser Blast", "is_open": true, "wait_time": 40, "last_updated": "2026-07-14T08:25:00.000Z"},
+    {"id": 99, "name": "Standalone Ride", "is_open": true, "wait_time": 10, "last_updated": "2026-07-14T08:25:00.000Z"}
+  ]
+}

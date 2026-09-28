@@ -1,0 +1,42 @@
+name: Collect wait times
+
+on:
+  schedule:
+    - cron: "*/15 * * * *" # GitHub may delay scheduled runs by a few minutes under load
+  workflow_dispatch:
+
+# Never run two collections at the same time.
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      # Exposed at job level so the keep-alive step can test it in its `if:`
+      # (secrets cannot be referenced directly in conditions).
+      SPACE_URL: ${{ secrets.SPACE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      # Only the small "collector" dependency group is installed, not the whole app.
+      - name: Collect Queue-Times snapshots
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+        run: uv run --frozen --no-dev --only-group collector python -m collector.collect
+
+      # Pings the Hugging Face Space so it never goes to sleep. Runs even if the
+      # collection failed, never fails the workflow, skipped when SPACE_URL is unset.
+      - name: Keep Hugging Face Space awake
+        if: ${{ always() && env.SPACE_URL != '' }}
+        continue-on-error: true
+        run: curl --fail --silent --show-error --max-time 30 "${SPACE_URL%/}/health"
