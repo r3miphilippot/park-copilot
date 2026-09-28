@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 from zoneinfo import ZoneInfo
 
@@ -17,6 +18,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 PARIS_TZ = ZoneInfo("Europe/Paris")
 
 QUEUE_TIMES_BASE_URL = "https://queue-times.com"
+
+BASE_DIR = Path(__file__).resolve().parent.parent  # repository root
 
 
 @dataclass(frozen=True)
@@ -42,6 +45,25 @@ class Settings(BaseSettings):
     # MongoDB Atlas (M0 free cluster)
     mongodb_uri: str = ""
     mongodb_db: str = "park_copilot"
+
+    # LLM: main provider + automatic fallback on 429 / timeout / 5xx.
+    # Groq quotas are per model, so another Groq model is a valid fallback on Hugging Face
+    # (where Ollama is not available). Locally: FALLBACK_PROVIDER=ollama FALLBACK_MODEL=qwen3.
+    llm_provider: Literal["groq", "ollama"] = "groq"
+    llm_model: str = "openai/gpt-oss-120b"
+    fallback_provider: Literal["groq", "ollama", "none"] = "groq"
+    fallback_model: str = "openai/gpt-oss-20b"
+    groq_api_key: str = ""
+    ollama_base_url: str = "http://localhost:11434"
+    llm_timeout_s: float = 30.0
+    llm_max_retry_wait_s: float = 5.0  # wait for `retry-after` only when it is this short
+    agent_max_iterations: int = 6  # LLM calls per user message before forcing an answer
+
+    # RAG: local embeddings (FastEmbed, no API) + in-memory Chroma rebuilt at startup.
+    # Multilingual model because the guide and the questions are in French.
+    embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    knowledge_dir: Path = BASE_DIR / "knowledge"
+    fastembed_cache_dir: Path = BASE_DIR / ".fastembed_cache"
 
 
 @lru_cache
