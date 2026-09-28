@@ -8,15 +8,8 @@ import pytest
 import respx
 
 from app.config import PARKS, QUEUE_TIMES_BASE_URL
-from collector.collect import (
-    build_snapshots,
-    ensure_indexes,
-    exit_code,
-    fetch_queue_times,
-    iter_rides,
-    run,
-    save_snapshots,
-)
+from app.queue_times import fetch_queue_times, iter_rides
+from collector.collect import build_snapshots, ensure_indexes, exit_code, run, save_snapshots
 
 PARK = PARKS["disneyland_park"]
 OTHER_PARK = PARKS["adventure_world"]
@@ -71,8 +64,17 @@ def test_closed_ride_has_no_wait_time():
 
 
 def test_winter_time_hour_is_paris_time():
-    payload = {"rides": [{"id": 1, "name": "A", "is_open": True, "wait_time": 5,
-                          "last_updated": "2026-12-01T09:00:00Z"}]}
+    payload = {
+        "rides": [
+            {
+                "id": 1,
+                "name": "A",
+                "is_open": True,
+                "wait_time": 5,
+                "last_updated": "2026-12-01T09:00:00Z",
+            }
+        ]
+    }
     [doc] = build_snapshots(PARK, payload, NOW)
     assert doc["hour"] == 10  # UTC+1 in winter
 

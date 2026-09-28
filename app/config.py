@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import Literal
 from zoneinfo import ZoneInfo
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -24,6 +25,9 @@ class Park:
     queue_times_id: int
     name: str
 
+
+# Type used by tool arguments: the LLM can only pass one of these values.
+ParkKey = Literal["disneyland_park", "adventure_world"]
 
 # IDs taken from https://queue-times.com/parks.json (group "Walt Disney Attractions").
 PARKS: dict[str, Park] = {

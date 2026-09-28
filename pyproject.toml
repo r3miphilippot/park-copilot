@@ -33,6 +33,7 @@ package = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = ["integration: needs real external services (skipped when not configured)"]
 
 [tool.ruff]
 line-length = 100

@@ -21,8 +21,6 @@ import argparse
 import json
 import logging
 import sys
-import time
-from collections.abc import Iterator
 from datetime import UTC, datetime
 from typing import Any
 
@@ -31,59 +29,14 @@ from pymongo import ASCENDING, MongoClient
 from pymongo.collection import Collection
 from pymongo.errors import BulkWriteError
 
-from app.config import PARIS_TZ, PARKS, QUEUE_TIMES_BASE_URL, Park, get_settings
+from app.config import PARIS_TZ, PARKS, Park, get_settings
+from app.db import SNAPSHOTS_COLLECTION
+from app.queue_times import HTTP_TIMEOUT_S, USER_AGENT, fetch_queue_times, iter_rides
 
 log = logging.getLogger("collector")
 
-COLLECTION_NAME = "wait_snapshots"
-HTTP_TIMEOUT_S = 10.0
-MAX_ATTEMPTS = 3
-
-
-# --------------------------------------------------------------------------- fetch
-
-
-def fetch_queue_times(
-    client: httpx.Client, park: Park, *, attempts: int = MAX_ATTEMPTS, backoff_s: float = 2.0
-) -> dict[str, Any]:
-    """GET the live queue times of one park, retrying transient errors."""
-    url = f"{QUEUE_TIMES_BASE_URL}/parks/{park.queue_times_id}/queue_times.json"
-    for attempt in range(1, attempts + 1):
-        try:
-            response = client.get(url)
-            response.raise_for_status()
-            return response.json()
-        except (httpx.TransportError, httpx.HTTPStatusError, ValueError) as exc:
-            # A 4xx (except 429 "too many requests") will not fix itself: fail fast.
-            if isinstance(exc, httpx.HTTPStatusError):
-                status = exc.response.status_code
-                if status < 500 and status != 429:
-                    raise
-            if attempt == attempts:
-                raise
-            log.warning("%s: attempt %d/%d failed (%s), retrying", park.key, attempt, attempts, exc)
-            time.sleep(backoff_s * attempt)
-    raise AssertionError("unreachable")
-
 
 # --------------------------------------------------------------------------- transform
-
-
-def iter_rides(payload: dict[str, Any]) -> Iterator[tuple[str | None, dict[str, Any]]]:
-    """Yield (land_name, ride) pairs.
-
-    Queue-Times puts rides in `lands[].rides[]` and sometimes also in a root `rides[]`
-    (rides without a land). A ride listed twice is only yielded once.
-    """
-    seen: set[int] = set()
-    sources = [(land.get("name"), land.get("rides", [])) for land in payload.get("lands", [])]
-    sources.append((None, payload.get("rides", [])))
-    for land_name, rides in sources:
-        for ride in rides:
-            if ride.get("id") is None or ride["id"] in seen:
-                continue
-            seen.add(ride["id"])
-            yield land_name, ride
 
 
 def _parse_utc(value: str | None) -> datetime | None:
@@ -222,7 +175,7 @@ def main(argv: list[str] | None = None) -> int:
             log.error("MONGODB_URI is not set (use --dry-run to test without a database)")
             return 2
         mongo = MongoClient(settings.mongodb_uri, serverSelectionTimeoutMS=10_000, tz_aware=True)
-        collection = mongo[settings.mongodb_db][COLLECTION_NAME]
+        collection = mongo[settings.mongodb_db][SNAPSHOTS_COLLECTION]
         try:
             ensure_indexes(collection)
         except Exception as exc:
@@ -230,7 +183,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
     try:
-        with httpx.Client(timeout=HTTP_TIMEOUT_S, headers={"User-Agent": "park-copilot"}) as client:
+        with httpx.Client(timeout=HTTP_TIMEOUT_S, headers={"User-Agent": USER_AGENT}) as client:
             summary = run(client, collection)
     finally:
         if mongo is not None:
