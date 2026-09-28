@@ -24,12 +24,26 @@ jobs:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
       HF_SPACE: ${{ vars.HF_SPACE }} # e.g. "your-username/park-copilot"
     steps:
+      # Tolerates copy-paste accidents: spaces/newlines, or a full Space URL instead of
+      # "user/space". The cleaned values are passed to the next steps.
       - name: Check configuration
         run: |
-          if [ -z "$HF_TOKEN" ] || [ -z "$HF_SPACE" ]; then
+          token=$(printf '%s' "$HF_TOKEN" | tr -d '[:space:]')
+          space=$(printf '%s' "$HF_SPACE" | tr -d '[:space:]')
+          space=${space#https://huggingface.co/spaces/}
+          space=${space%/}
+          if [ -z "$token" ] || [ -z "$space" ]; then
             echo "::error::Set the HF_TOKEN secret and the HF_SPACE variable in the repo settings"
             exit 1
           fi
+          if ! printf '%s' "$space" | grep -Eq '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'; then
+            echo "::error::HF_SPACE must look like 'username/space-name', got '$space'"
+            exit 1
+          fi
+          echo "::add-mask::$token"
+          echo "DEPLOY_TOKEN=$token" >> "$GITHUB_ENV"
+          echo "DEPLOY_SPACE=$space" >> "$GITHUB_ENV"
+          echo "Deploying to https://huggingface.co/spaces/$space"
 
       - uses: actions/checkout@v4
         with:
@@ -63,4 +77,4 @@ jobs:
           git checkout --orphan space
           git add -A
           git commit -m "Deploy ${GITHUB_SHA::7} from GitHub"
-          git push --force "https://user:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}" space:main
+          git push --force "https://user:${DEPLOY_TOKEN}@huggingface.co/spaces/${DEPLOY_SPACE}" space:main
