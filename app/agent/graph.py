@@ -37,6 +37,7 @@ from pydantic import BaseModel, Field
 
 from app.agent.prompts import (
     MODE_DETECTION_PROMPT,
+    Lang,
     Mode,
     build_system_prompt,
     calendar,
@@ -53,10 +54,13 @@ log = logging.getLogger(__name__)
 LIVE_TOOLS = {"get_live_wait_times", "compare_live_vs_typical"}
 PAST_EXCHANGES_KEPT = 6  # previous question/answer pairs sent back to the LLM
 
-UNAVAILABLE_MESSAGE = (
-    "Le service d'IA est momentanément saturé (quota gratuit atteint). "
-    "Réessaie dans une minute, désolé !"
-)
+UNAVAILABLE_MESSAGES: dict[str, str] = {
+    "fr": "Le service d'IA est momentanément saturé (quota gratuit atteint). "
+    "Réessaie dans une minute, désolé !",
+    "en": "The AI service is temporarily overloaded (free quota reached). "
+    "Please try again in a minute, sorry!",
+}
+UNAVAILABLE_MESSAGE = UNAVAILABLE_MESSAGES["fr"]
 
 
 class AgentState(TypedDict):
@@ -64,6 +68,7 @@ class AgentState(TypedDict):
     mode: Mode
     target_date: str | None  # ISO date
     iterations: int  # LLM calls for the current user message
+    lang: Lang | None  # answer language chosen in the interface (None: the question's)
 
 
 class ModeDecision(BaseModel):
@@ -164,8 +169,9 @@ def build_graph(
         iterations = state.get("iterations", 0)
         limit_reached = iterations >= max_iterations
         target = date.fromisoformat(state["target_date"]) if state.get("target_date") else None
+        lang = state.get("lang")
         system = build_system_prompt(
-            now_paris(), state["mode"], target, limit_reached=limit_reached
+            now_paris(), state["mode"], target, limit_reached=limit_reached, lang=lang
         )
         bound = [] if limit_reached else tools_for(state["mode"])
         try:
@@ -177,7 +183,8 @@ def build_graph(
         except LLMUnavailable as exc:
             log.error("LLM unavailable: %s", exc)
             _emit({"type": "llm", "provider": None, "fallback": True, "unavailable": True})
-            return {"messages": [AIMessage(UNAVAILABLE_MESSAGE)], "iterations": iterations + 1}
+            message = UNAVAILABLE_MESSAGES[lang or "fr"]
+            return {"messages": [AIMessage(message)], "iterations": iterations + 1}
         _emit({"type": "llm", "provider": result.provider, "fallback": result.fallback_used})
         return {"messages": [result.value], "iterations": iterations + 1}
 

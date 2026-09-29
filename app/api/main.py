@@ -20,7 +20,7 @@ import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -38,20 +38,40 @@ log = logging.getLogger(__name__)
 STATIC_DIR = Path(__file__).parent / "static"
 SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 
-RATE_LIMIT_MESSAGE = (
-    "Doucement 🙂 Trop de messages en une minute. Réessaie dans {seconds} secondes."
-)
-DAILY_CAP_MESSAGE = (
-    "Park Copilot a atteint sa limite de conversations pour aujourd'hui (quota gratuit). "
-    "Reviens demain !"
-)
-NOT_CONFIGURED_MESSAGE = "Le service d'IA n'est pas configuré (clé API manquante)."
-ERROR_MESSAGE = "Une erreur inattendue est survenue. Réessaie dans un instant."
+MESSAGES = {
+    "rate_limited": {
+        "fr": "Doucement 🙂 Trop de messages en une minute. Réessaie dans {seconds} secondes.",
+        "en": "Easy 🙂 Too many messages in a minute. Try again in {seconds} seconds.",
+    },
+    "daily_cap": {
+        "fr": "Park Copilot a atteint sa limite de conversations pour aujourd'hui (quota "
+        "gratuit). Reviens demain !",
+        "en": "Park Copilot has reached its conversation limit for today (free quota). "
+        "Come back tomorrow!",
+    },
+    "not_configured": {
+        "fr": "Le service d'IA n'est pas configuré (clé API manquante).",
+        "en": "The AI service is not configured (missing API key).",
+    },
+    "error": {
+        "fr": "Une erreur inattendue est survenue. Réessaie dans un instant.",
+        "en": "An unexpected error occurred. Please try again in a moment.",
+    },
+}
+# French versions, kept as constants for the tests and the default language.
+DAILY_CAP_MESSAGE = MESSAGES["daily_cap"]["fr"]
+NOT_CONFIGURED_MESSAGE = MESSAGES["not_configured"]["fr"]
+ERROR_MESSAGE = MESSAGES["error"]["fr"]
 
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
     thread_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
+    # Answer language picked in the interface; omitted = the language of the question.
+    lang: Literal["fr", "en"] | None = None
+
+    def text(self, key: str, **values: Any) -> str:
+        return MESSAGES[key][self.lang or "fr"].format(**values)
 
 
 def sse(event: str, data: dict[str, Any]) -> str:
@@ -139,19 +159,20 @@ def create_app(
         thread_id = body.thread_id or uuid.uuid4().hex
         trace = RequestTrace(thread_id)
 
+        metrics = app.state.metrics
         allowed, retry_in = limiter.hit(client_ip(request))
         if not allowed:
-            text = RATE_LIMIT_MESSAGE.format(seconds=retry_in)
-            return _message_response(text, trace, "rate_limited", app.state.metrics)
+            text = body.text("rate_limited", seconds=retry_in)
+            return _message_response(text, trace, "rate_limited", metrics)
         if app.state.graph is None:
-            return _message_response(NOT_CONFIGURED_MESSAGE, trace, "error", app.state.metrics)
+            return _message_response(body.text("not_configured"), trace, "error", metrics)
         if not daily_cap.try_acquire(now_paris().date()):
-            return _message_response(DAILY_CAP_MESSAGE, trace, "daily_cap", app.state.metrics)
+            return _message_response(body.text("daily_cap"), trace, "daily_cap", metrics)
 
         for old_thread in threads.touch(thread_id):
             app.state.graph.checkpointer.delete_thread(old_thread)
 
-        stream = _stream_agent(app.state.graph, body.message, trace, callbacks, app.state.metrics)
+        stream = _stream_agent(app.state.graph, body, trace, callbacks, metrics)
         return StreamingResponse(stream, media_type="text/event-stream", headers=SSE_HEADERS)
 
     return app
@@ -196,7 +217,7 @@ def _message_response(
 
 
 async def _stream_agent(
-    graph, message: str, trace: RequestTrace, callbacks: list, metrics: Metrics
+    graph, body: ChatRequest, trace: RequestTrace, callbacks: list, metrics: Metrics
 ) -> AsyncIterator[str]:
     config = {
         "configurable": {"thread_id": trace.thread_id},
@@ -208,7 +229,9 @@ async def _stream_agent(
     status, error = "ok", None
     try:
         stream = graph.astream(
-            {"messages": [HumanMessage(message)]}, config, stream_mode=["messages", "custom"]
+            {"messages": [HumanMessage(body.message)], "lang": body.lang},
+            config,
+            stream_mode=["messages", "custom"],
         )
         async for kind, payload in stream:
             if kind == "custom":
@@ -252,7 +275,7 @@ async def _stream_agent(
     except Exception as exc:
         log.exception("chat failed")
         status, error = "error", repr(exc)
-        yield sse("error", {"message": ERROR_MESSAGE})
+        yield sse("error", {"message": body.text("error")})
     finally:
         if trace.latency_ms is None or status == "error":
             trace.finish(status, error)

@@ -117,6 +117,24 @@ async def test_daily_cap_answers_with_a_message():
     assert capped[-1][1]["limited"] == "daily_cap"
 
 
+async def test_language_reaches_the_agent_and_the_limit_messages():
+    graph = fake_graph(mode_decision("general"), AIMessage("Hello!"))
+    app = create_app(settings=settings(daily_request_cap=1), graph=graph, warmup=False)
+    async with client(app) as c:
+        response = await c.post("/chat", json={"message": "Hi", "lang": "en", "thread_id": "en-1"})
+        capped = parse_sse((await c.post("/chat", json={"message": "Hi", "lang": "en"})).text)
+    assert response.status_code == 200
+    state = await graph.aget_state({"configurable": {"thread_id": "en-1"}})
+    assert state.values["lang"] == "en"
+    assert capped[0][1]["text"].startswith("Park Copilot has reached")
+
+
+async def test_unknown_language_is_rejected():
+    app = create_app(settings=settings(), graph=fake_graph(), warmup=False)
+    async with client(app) as c:
+        assert (await c.post("/chat", json={"message": "Hola", "lang": "es"})).status_code == 422
+
+
 async def test_missing_llm_configuration_answers_with_a_message():
     app = create_app(settings=settings(), graph=None, warmup=False)
     async with client(app) as c:

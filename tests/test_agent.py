@@ -136,6 +136,24 @@ def test_history_keeps_current_turn_and_drops_old_tool_outputs():
     assert [m.content for m in kept] == ["q1", "answer 1", "q2", "", "{current}"]
 
 
+@pytest.mark.parametrize(
+    ("lang", "expected"),
+    [("en", "Réponds en ANGLAIS"), ("fr", "Réponds en français."), (None, "langue du visiteur")],
+)
+def test_system_prompt_answer_language(lang, expected):
+    assert expected in build_system_prompt(TUESDAY_1030, "general", None, lang=lang)
+
+
+async def test_english_unavailable_message():
+    request = httpx.Request("POST", "https://api.groq.com")
+    limited = groq.RateLimitError("limit", response=httpx.Response(429, request=request), body=None)
+    graph, _ = make_graph([limited, limited])
+    config = {"configurable": {"thread_id": "en"}}
+    with frozen_now(TUESDAY_1030):
+        state = await graph.ainvoke({"messages": [HumanMessage("Plan?")], "lang": "en"}, config)
+    assert state["messages"][-1].content.startswith("The AI service is temporarily overloaded")
+
+
 def test_system_prompt_planning_mentions_target_weekday():
     prompt = build_system_prompt(TUESDAY_1030, "planning", date(2026, 7, 18))
     assert "mardi 14 juillet 2026, 10:30" in prompt

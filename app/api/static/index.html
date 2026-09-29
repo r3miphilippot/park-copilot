@@ -81,6 +81,11 @@
   .ghost { display: inline-flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--border);
            border-radius: 999px; padding: 7px 13px; font-size: 13px; cursor: pointer; box-shadow: var(--shadow); }
   .ghost:hover { border-color: var(--primary); }
+  .lang { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+          padding: 3px; box-shadow: var(--shadow); flex: none; }
+  .lang button { border: 0; background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 600;
+                 padding: 5px 10px; border-radius: 999px; cursor: pointer; }
+  .lang button[aria-pressed="true"] { background: linear-gradient(135deg, var(--primary), var(--primary-2)); color: #fff; }
 
   /* ---------------------------------------------------------------- welcome */
   .hero { padding: 36px 0 12px; animation: rise .5s ease both; }
@@ -192,35 +197,39 @@
     </div>
     <div class="brand">
       <strong>Park Copilot</strong>
-      <span>Assistant IA · Disneyland Paris, les deux parcs</span>
+      <span data-i18n="tagline">Assistant IA · Disneyland Paris, les deux parcs</span>
     </div>
     <div class="spacer"></div>
     <button class="ghost" id="reset" type="button" hidden>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-      Nouvelle conversation
+      <span data-i18n="reset">Nouvelle conversation</span>
     </button>
+    <div class="lang" role="group" aria-label="Langue / Language">
+      <button type="button" data-lang="fr" aria-pressed="true">FR</button>
+      <button type="button" data-lang="en" aria-pressed="false">EN</button>
+    </div>
   </header>
 
   <main id="main">
     <section class="hero" id="welcome">
-      <h1>Ta journée au parc,<br><em>planifiée en quelques secondes.</em></h1>
-      <p>Park Copilot combine les temps d'attente habituels, les temps live, la météo heure par heure
+      <h1 data-i18n="title">Ta journée au parc,<br><em>planifiée en quelques secondes.</em></h1>
+      <p data-i18n="intro">Park Copilot combine les temps d'attente habituels, les temps live, la météo heure par heure
          et un guide de visite pour te proposer un programme concret.</p>
       <div class="cards">
-        <button class="card" type="button" data-q="Je viens samedi au Disneyland Park avec des enfants de 5 et 9 ans, tu me fais un programme ?">
-          <div class="ico">📅</div><b>Planifier une journée</b><span>Un programme horodaté pour une date à venir</span>
+        <button class="card" type="button" data-card="plan">
+          <div class="ico">📅</div><b></b><span></span>
         </button>
-        <button class="card" type="button" data-q="Je suis au Disneyland Park, qu'est-ce qui est plus calme que d'habitude en ce moment ?">
-          <div class="ico">📍</div><b>Je suis au parc</b><span>Ce qui vaut le coup maintenant, live vs habituel</span>
+        <button class="card" type="button" data-card="now">
+          <div class="ico">📍</div><b></b><span></span>
         </button>
-        <button class="card" type="button" data-q="Il va pleuvoir demain ? Quelles attractions faire au Disney Adventure World ?">
-          <div class="ico">🌦️</div><b>Météo et plan B</b><span>Attractions intérieures pendant les averses</span>
+        <button class="card" type="button" data-card="rain">
+          <div class="ico">🌦️</div><b></b><span></span>
         </button>
-        <button class="card" type="button" data-q="C'est quoi une file Single Rider et sur quelles attractions ?">
-          <div class="ico">💡</div><b>Astuces de visite</b><span>Single Rider, meilleurs moments, accessibilité</span>
+        <button class="card" type="button" data-card="tips">
+          <div class="ico">💡</div><b></b><span></span>
         </button>
       </div>
-      <div class="pills"><span>Temps live</span><span>Historique d'attente</span><span>Météo horaire</span><span>Guide de visite</span></div>
+      <div class="pills" data-i18n="pills"></div>
     </section>
 
     <div id="log" aria-live="polite"></div>
@@ -228,32 +237,111 @@
 
   <div class="composer">
     <form class="box" id="form">
-      <textarea id="input" rows="1" maxlength="2000" placeholder="Pose ta question… (ex : on vient mardi, par quoi commencer ?)" aria-label="Message"></textarea>
-      <button class="send" id="send" type="submit" aria-label="Envoyer">
+      <textarea id="input" rows="1" maxlength="2000" aria-label="Message"></textarea>
+      <button class="send" id="send" type="submit">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
       </button>
     </form>
-    <div class="credits">
-      Temps d'attente : <a href="https://queue-times.com/" target="_blank" rel="noopener">Powered by Queue-Times.com</a> (données non officielles)
-      · Météo : <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a>
-      · Projet indépendant, non affilié aux parcs.
-    </div>
+    <div class="credits" data-i18n="credits"></div>
   </div>
 </div>
 
 <script>
-const TOOLS = {
-  get_live_wait_times: ["⏱️", "Temps live"],
-  get_typical_wait: ["📊", "Attentes habituelles"],
-  compare_live_vs_typical: ["⚖️", "Live vs habituel"],
-  get_weather: ["🌦️", "Météo"],
-  search_park_guide: ["📖", "Guide"],
+// ------------------------------------------------------------------ translations (FR / EN)
+
+const CREDITS = {
+  fr: 'Temps d\'attente : <a href="https://queue-times.com/" target="_blank" rel="noopener">Powered by Queue-Times.com</a> (données non officielles) · Météo : <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> · Projet indépendant, non affilié aux parcs.',
+  en: 'Wait times: <a href="https://queue-times.com/" target="_blank" rel="noopener">Powered by Queue-Times.com</a> (unofficial data) · Weather: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> · Independent project, not affiliated with the parks.',
 };
-const MODES = {
-  planning: ["📅", "Planification"],
-  in_park: ["📍", "Au parc"],
-  general: ["💬", "Question générale"],
+const I18N = {
+  fr: {
+    tagline: "Assistant IA · Disneyland Paris, les deux parcs",
+    reset: "Nouvelle conversation",
+    title: "Ta journée au parc,<br><em>planifiée en quelques secondes.</em>",
+    intro: "Park Copilot combine les temps d'attente habituels, les temps live, la météo heure par heure et un guide de visite pour te proposer un programme concret.",
+    pills: "<span>Temps live</span><span>Historique d'attente</span><span>Météo horaire</span><span>Guide de visite</span>",
+    credits: CREDITS.fr,
+    placeholder: "Pose ta question… (ex : on vient mardi, par quoi commencer ?)",
+    send: "Envoyer",
+    cards: {
+      plan: ["Planifier une journée", "Un programme horodaté pour une date à venir",
+             "Je viens samedi au Disneyland Park avec des enfants de 5 et 9 ans, tu me fais un programme ?"],
+      now: ["Je suis au parc", "Ce qui vaut le coup maintenant, live vs habituel",
+            "Je suis au Disneyland Park, qu'est-ce qui est plus calme que d'habitude en ce moment ?"],
+      rain: ["Météo et plan B", "Attractions intérieures pendant les averses",
+             "Il va pleuvoir demain ? Quelles attractions faire au Disney Adventure World ?"],
+      tips: ["Astuces de visite", "Single Rider, meilleurs moments, accessibilité",
+             "C'est quoi une file Single Rider et sur quelles attractions ?"],
+    },
+    tools: {
+      get_live_wait_times: ["⏱️", "Temps live"],
+      get_typical_wait: ["📊", "Attentes habituelles"],
+      compare_live_vs_typical: ["⚖️", "Live vs habituel"],
+      get_weather: ["🌦️", "Météo"],
+      search_park_guide: ["📖", "Guide"],
+    },
+    modes: { planning: ["📅", "Planification"], in_park: ["📍", "Au parc"], general: ["💬", "Question générale"] },
+    tool: n => `${n} outil${n > 1 ? "s" : ""}`,
+    decimal: ",",
+    offline: "Impossible de joindre le serveur. Réessaie dans un instant.",
+    error: "Erreur",
+  },
+  en: {
+    tagline: "AI assistant · Disneyland Paris, both parks",
+    reset: "New conversation",
+    title: "Your day at the park,<br><em>planned in seconds.</em>",
+    intro: "Park Copilot combines usual wait times, live waits, the hourly weather and a visit guide to build you a concrete plan.",
+    pills: "<span>Live waits</span><span>Wait history</span><span>Hourly weather</span><span>Visit guide</span>",
+    credits: CREDITS.en,
+    placeholder: "Ask anything… (e.g. we're coming on Tuesday, where should we start?)",
+    send: "Send",
+    cards: {
+      plan: ["Plan a day", "A timed plan for an upcoming date",
+             "We're going to Disneyland Park on Saturday with kids aged 5 and 9, can you make us a plan?"],
+      now: ["I'm at the park", "What's worth it right now, live vs usual",
+            "I'm at Disneyland Park, what is quieter than usual right now?"],
+      rain: ["Weather & plan B", "Indoor rides during showers",
+             "Will it rain tomorrow? Which rides should we do at Disney Adventure World?"],
+      tips: ["Visit tips", "Single Rider, best times, accessibility",
+             "What is a Single Rider line and which rides have one?"],
+    },
+    tools: {
+      get_live_wait_times: ["⏱️", "Live waits"],
+      get_typical_wait: ["📊", "Usual waits"],
+      compare_live_vs_typical: ["⚖️", "Live vs usual"],
+      get_weather: ["🌦️", "Weather"],
+      search_park_guide: ["📖", "Guide"],
+    },
+    modes: { planning: ["📅", "Planning"], in_park: ["📍", "At the park"], general: ["💬", "General question"] },
+    tool: n => `${n} tool${n > 1 ? "s" : ""}`,
+    decimal: ".",
+    offline: "Can't reach the server. Please try again in a moment.",
+    error: "Error",
+  },
 };
+
+function detectLang() {
+  try { const saved = localStorage.getItem("lang"); if (saved in I18N) return saved; } catch (_) {}
+  return (navigator.language || "fr").toLowerCase().startsWith("fr") ? "fr" : "en";
+}
+let lang = detectLang();
+const t = () => I18N[lang];
+
+function applyLang(next) {
+  lang = next;
+  try { localStorage.setItem("lang", lang); } catch (_) {}
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach(node => { node.innerHTML = t()[node.dataset.i18n]; });
+  document.querySelectorAll(".card").forEach(card => {
+    const [title, subtitle, question] = t().cards[card.dataset.card];
+    card.querySelector("b").textContent = title;
+    card.querySelector("span").textContent = subtitle;
+    card.dataset.q = question;
+  });
+  input.placeholder = t().placeholder;
+  send.setAttribute("aria-label", t().send);
+  document.querySelectorAll(".lang button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
+}
 const AVATAR = '<svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M12 2.5l2.2 6.3 6.3 2.2-6.3 2.2L12 19.5l-2.2-6.3L3.5 11l6.3-2.2z"/></svg>';
 
 const $ = id => document.getElementById(id);
@@ -378,7 +466,7 @@ async function ask(message) {
     const response = await fetch("chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(threadId ? { message, thread_id: threadId } : { message }),
+      body: JSON.stringify(threadId ? { message, lang, thread_id: threadId } : { message, lang }),
     });
     if (!response.ok || !response.body) throw new Error("HTTP " + response.status);
     const reader = response.body.getReader();
@@ -399,7 +487,7 @@ async function ask(message) {
     }
   } catch (err) {
     typing.remove();
-    answer.insertAdjacentHTML("beforeend", '<p class="error">Impossible de joindre le serveur. Réessaie dans un instant.</p>');
+    answer.insertAdjacentHTML("beforeend", `<p class="error">${t().offline}</p>`);
   } finally {
     typing.remove();
     send.disabled = false;
@@ -408,10 +496,10 @@ async function ask(message) {
 
   function handle(event, data) {
     if (event === "mode") {
-      const [icon, label] = MODES[data.mode] || ["", data.mode];
+      const [icon, label] = t().modes[data.mode] || ["", data.mode];
       steps.append(el("span", `badge ${data.mode}`, `${icon} ${label}`));
     } else if (event === "tool_start") {
-      const [icon, label] = TOOLS[data.name] || ["🔧", data.name];
+      const [icon, label] = t().tools[data.name] || ["🔧", data.name];
       running[data.id] = el("span", "step run", `<span class="state"></span>${icon} ${label}`);
       steps.append(running[data.id]);
     } else if (event === "tool_end" && running[data.id]) {
@@ -426,13 +514,13 @@ async function ask(message) {
       }
       if (data.latency_ms !== undefined) {
         const parts = [];
-        if (data.mode && MODES[data.mode]) parts.push(MODES[data.mode][1]);
-        if (data.tools?.length) parts.push(`${data.tools.length} outil${data.tools.length > 1 ? "s" : ""}`);
-        parts.push(`${(data.latency_ms / 1000).toFixed(1).replace(".", ",")} s`);
+        if (data.mode && t().modes[data.mode]) parts.push(t().modes[data.mode][1]);
+        if (data.tools?.length) parts.push(t().tool(data.tools.length));
+        parts.push(`${(data.latency_ms / 1000).toFixed(1).replace(".", t().decimal)} s`);
         bubble.append(el("div", "footnote", parts.join(" · ")));
       }
     } else if (event === "error") {
-      answer.insertAdjacentHTML("beforeend", `<p class="error">⚠️ ${escapeHtml(data.message || "Erreur")}</p>`);
+      answer.insertAdjacentHTML("beforeend", `<p class="error">⚠️ ${escapeHtml(data.message || t().error)}</p>`);
     }
     if (event === "token" || event === "error") typing.remove();
     scrollDown();
@@ -452,6 +540,8 @@ input.addEventListener("keydown", e => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); }
 });
 document.querySelectorAll(".card").forEach(card => card.addEventListener("click", () => ask(card.dataset.q)));
+document.querySelectorAll(".lang button").forEach(b => b.addEventListener("click", () => applyLang(b.dataset.lang)));
+applyLang(lang);
 </script>
 </body>
 </html>

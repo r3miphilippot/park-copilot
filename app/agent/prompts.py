@@ -74,10 +74,22 @@ payant qui n'y figure pas.
 données) ». Regroupe par zone, place les attractions intérieures pendant les heures de \
 pluie. Pas de tableau, pas de conseils génériques superflus.
 8. Paramètre `weekday` des outils : 0 = lundi … 6 = dimanche. `hour` est l'heure de Paris.
-9. Réponds dans la langue du visiteur (français par défaut), de façon concise. Les temps \
-d'attente viennent de Queue-Times.com (données non officielles).
+9. {language_line} Sois concis. Les temps d'attente viennent de Queue-Times.com (données \
+non officielles).
 10. Pour une demande sans rapport avec la visite des parcs, décline poliment.
 {limit_line}"""
+
+Lang = Literal["fr", "en"]
+
+# The interface sends the language chosen by the visitor; without it, follow the question.
+LANGUAGE_LINES: dict[Lang | None, str] = {
+    "fr": "Réponds en français.",
+    "en": (
+        "Réponds en ANGLAIS (English), même si le guide et les sorties d'outils sont en "
+        "français : traduis les conseils du guide, garde les noms d'attractions tels quels."
+    ),
+    None: "Réponds dans la langue du visiteur (français par défaut).",
+}
 
 MODE_LINES: dict[Mode, str] = {
     "planning": (
@@ -105,7 +117,12 @@ LIMIT_LINE = (
 
 
 def build_system_prompt(
-    now: datetime, mode: Mode, target_date: date | None, *, limit_reached: bool = False
+    now: datetime,
+    mode: Mode,
+    target_date: date | None,
+    *,
+    limit_reached: bool = False,
+    lang: Lang | None = None,
 ) -> str:
     target = target_date or now.date()
     mode_line = MODE_LINES[mode].format(
@@ -114,5 +131,6 @@ def build_system_prompt(
     return SYSTEM_PROMPT.format(
         now=f"{format_day(now.date())}, {now:%H:%M}",
         mode_line=mode_line,
+        language_line=LANGUAGE_LINES[lang],
         limit_line=LIMIT_LINE if limit_reached else "",
     )
