@@ -9,3 +9,11 @@ htmlcov/
 chroma_db/
 .fastembed_cache/
 evals/reports/
+
+# Terraform: providers cache, state (contains the DB password) and variable files (secrets).
+# .terraform.lock.hcl is committed on purpose: it pins the provider versions.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log

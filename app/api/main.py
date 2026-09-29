@@ -14,6 +14,8 @@ SSE events sent by POST /chat, in order:
 from __future__ import annotations
 
 import asyncio
+import base64
+import hmac
 import json
 import logging
 import uuid
@@ -24,7 +26,7 @@ from typing import Any, Literal
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel, Field
 
@@ -84,6 +86,24 @@ def client_ip(request: Request) -> str:
     if forwarded:
         return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
+
+
+PROMETHEUS_CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
+
+
+def _authorized(request: Request, token: str) -> bool:
+    """Bearer <token>, or Basic auth whose password is the token (what scrapers support)."""
+    header = request.headers.get("authorization", "")
+    scheme, _, value = header.partition(" ")
+    if scheme.lower() == "bearer":
+        return hmac.compare_digest(value, token)
+    if scheme.lower() == "basic":
+        try:
+            _, _, password = base64.b64decode(value).decode().partition(":")
+        except ValueError:
+            return False
+        return hmac.compare_digest(password, token)
+    return False
 
 
 def _warmup() -> None:
@@ -149,6 +169,13 @@ def create_app(
             "fallback": f"{settings.fallback_provider}:{settings.fallback_model}",
         }
         return snapshot
+
+    @app.get("/metrics/prometheus", include_in_schema=False)
+    async def prometheus_metrics(request: Request) -> Response:
+        """Prometheus text format, scraped by Grafana Cloud (Metrics Endpoint integration)."""
+        if settings.metrics_token and not _authorized(request, settings.metrics_token):
+            return Response(status_code=401, headers={"WWW-Authenticate": "Bearer"})
+        return Response(app.state.metrics.prometheus.render(), media_type=PROMETHEUS_CONTENT_TYPE)
 
     @app.get("/", include_in_schema=False)
     async def index() -> FileResponse:

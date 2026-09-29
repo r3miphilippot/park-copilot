@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 from datetime import date
@@ -204,6 +205,38 @@ async def test_metrics_after_a_request():
     assert metrics["tool_calls"] == {"search_park_guide": 1}
     assert metrics["history_days"] == 12
     assert metrics["llm_fallback_rate"] == 0.0
+
+
+async def test_prometheus_metrics_after_a_request():
+    graph = fake_graph(
+        mode_decision("general"), tool_call("search_park_guide", {"query": "pluie"}),
+        AIMessage("ok"),
+    )  # fmt: skip
+    app = create_app(settings=settings(), graph=graph, warmup=False)
+    async with client(app) as c:
+        await chat(c)
+        response = await c.get("/metrics/prometheus")
+    assert response.status_code == 200 and response.headers["content-type"].startswith("text/plain")
+    text = response.text
+    assert 'park_copilot_chat_requests_total{status="ok"} 1.0' in text
+    assert 'park_copilot_tool_calls_total{ok="true",tool="search_park_guide"} 1.0' in text
+    assert "park_copilot_chat_duration_seconds_bucket" in text
+
+
+@pytest.mark.parametrize(
+    ("headers", "status"),
+    [
+        ({}, 401),
+        ({"Authorization": "Bearer wrong"}, 401),
+        ({"Authorization": "Bearer s3cret"}, 200),
+        ({"Authorization": "Basic " + base64.b64encode(b"grafana:s3cret").decode()}, 200),
+        ({"Authorization": "Basic not-base64!"}, 401),
+    ],
+)
+async def test_prometheus_metrics_token(headers, status):
+    app = create_app(settings=settings(metrics_token="s3cret"), graph=None, warmup=False)
+    async with client(app) as c:
+        assert (await c.get("/metrics/prometheus", headers=headers)).status_code == status
 
 
 @pytest.mark.parametrize(

@@ -123,8 +123,10 @@ class Metrics:
         self.daily_capped = 0
         self.tool_calls: dict[str, int] = {}
         self._latencies: deque[int] = deque(maxlen=window)  # last N requests only
+        self.prometheus = PrometheusMetrics()
 
     def record(self, trace: RequestTrace) -> None:
+        self.prometheus.observe(trace)
         with self._lock:
             if trace.status == "rate_limited":
                 self.rate_limited += 1
@@ -159,6 +161,61 @@ class Metrics:
                 "daily_cap_reached": self.daily_capped,
                 "tool_calls": dict(self.tool_calls),
             }
+
+
+class PrometheusMetrics:
+    """The same signals in the Prometheus text format, scraped by Grafana Cloud.
+
+    Counters and histograms (not precomputed percentiles): Grafana computes rates and p95 over
+    any time window, and `rate()` copes with the counters restarting at 0 after a redeploy.
+    Each app instance gets its own registry (tests create several apps in one process).
+    """
+
+    LATENCY_BUCKETS = (0.5, 1, 2, 3, 5, 8, 13, 20, 30, 60)  # seconds, a chat answer
+    TOOL_BUCKETS = (0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10)  # seconds, one tool call
+
+    def __init__(self) -> None:
+        from prometheus_client import CollectorRegistry, Counter, Histogram
+
+        self.registry = CollectorRegistry()
+        self.requests = Counter(
+            "park_copilot_chat_requests", "Chat requests by outcome", ["status"],
+            registry=self.registry,
+        )  # fmt: skip
+        self.latency = Histogram(
+            "park_copilot_chat_duration_seconds", "Time to a complete answer",
+            buckets=self.LATENCY_BUCKETS, registry=self.registry,
+        )  # fmt: skip
+        self.fallbacks = Counter(
+            "park_copilot_llm_fallbacks", "Answers that needed the fallback LLM",
+            registry=self.registry,
+        )  # fmt: skip
+        self.tool_calls = Counter(
+            "park_copilot_tool_calls", "Tool calls by tool and outcome", ["tool", "ok"],
+            registry=self.registry,
+        )  # fmt: skip
+        self.tool_latency = Histogram(
+            "park_copilot_tool_duration_seconds", "Tool call duration", ["tool"],
+            buckets=self.TOOL_BUCKETS, registry=self.registry,
+        )  # fmt: skip
+
+    def observe(self, trace: RequestTrace) -> None:
+        self.requests.labels(status=trace.status).inc()
+        if trace.status in ("rate_limited", "daily_cap"):
+            return  # refused before the agent ran: no latency, no tools
+        if trace.latency_ms is not None:
+            self.latency.observe(trace.latency_ms / 1000)
+        if trace.fallback:
+            self.fallbacks.inc()
+        for tool in trace.tools:
+            self.tool_calls.labels(tool=tool.name, ok=str(bool(tool.ok)).lower()).inc()
+            if tool.duration_ms is not None:
+                self.tool_latency.labels(tool=tool.name).observe(tool.duration_ms / 1000)
+
+    def render(self) -> bytes:
+        from prometheus_client import generate_latest
+
+        return generate_latest(self.registry)
 
 
 def _percentile(sorted_values: list[int], pct: int) -> int | None:

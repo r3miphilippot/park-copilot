@@ -75,6 +75,8 @@ class Settings(BaseSettings):
     # Protects the Groq free quota (~1000 requests/day/model, each chat = 3-4 LLM calls).
     daily_request_cap: int = 200
     max_threads: int = 500  # conversations kept in memory (oldest evicted first)
+    # Protects /metrics/prometheus (scraped by Grafana Cloud). Empty = open (local dev).
+    metrics_token: str = ""
     log_level: str = "INFO"
 
     # Observability: Langfuse (free cloud tier) is enabled only when both keys are set.

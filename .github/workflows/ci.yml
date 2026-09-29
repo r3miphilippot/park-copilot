@@ -27,6 +27,26 @@ jobs:
       - name: Tests
         run: uv run pytest -q
 
+  # Infrastructure as code: formatting and validation need no cloud credentials.
+  terraform:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Format
+        run: terraform fmt -check -recursive
+
+      - name: Validate
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+
   # Builds the production image and runs it like the free hosting does: port imposed
   # through $PORT and a hard 512 MB memory limit. Fails if the app does not fit.
   docker:
