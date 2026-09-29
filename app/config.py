@@ -41,7 +41,10 @@ PARKS: dict[str, Park] = {
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    # Absolute path: the MCP server may be launched from another directory (Claude Desktop).
+    model_config = SettingsConfigDict(
+        env_file=BASE_DIR / ".env", env_file_encoding="utf-8", extra="ignore"
+    )
 
     # MongoDB Atlas (M0 free cluster)
     mongodb_uri: str = ""

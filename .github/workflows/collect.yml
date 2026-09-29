@@ -2,7 +2,11 @@ name: Collect wait times
 
 on:
   schedule:
-    - cron: "*/15 * * * *" # GitHub may delay scheduled runs by a few minutes under load
+    # Every 15 min, off the round minutes: GitHub runs schedules "best effort" and the
+    # :00/:15/:30/:45 slots are the most congested (runs get delayed or dropped).
+    - cron: "7,22,37,52 * * * *"
+  # Also triggered by an external free cron service (cron-job.org) through the GitHub API,
+  # which is far more punctual than GitHub's own scheduler. Runs are idempotent anyway.
   workflow_dispatch:
 
 # Never run two collections at the same time.
