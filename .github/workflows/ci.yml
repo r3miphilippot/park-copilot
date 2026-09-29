@@ -26,3 +26,37 @@ jobs:
 
       - name: Tests
         run: uv run pytest -q
+
+  # Builds the production image and runs it like the free hosting does: port imposed
+  # through $PORT and a hard 512 MB memory limit. Fails if the app does not fit.
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the image
+        run: docker build -t park-copilot .
+
+      - name: Start it like Render (PORT imposed, 512 MB of RAM)
+        # A dummy key so the agent graph is built too; no LLM call is made.
+        run: >
+          docker run -d --name api -p 10000:10000 --memory=512m --memory-swap=512m
+          -e PORT=10000 -e GROQ_API_KEY=dummy park-copilot
+
+      - name: Wait for /health
+        run: |
+          for i in $(seq 1 60); do
+            curl -fsS http://localhost:10000/health && echo && exit 0
+            sleep 2
+          done
+          docker logs api
+          exit 1
+
+      - name: Still alive after warmup, within 512 MB
+        run: |
+          sleep 30  # warmup (embedding model + guide index) runs in the background
+          docker stats --no-stream api
+          test "$(docker inspect -f '{{.State.OOMKilled}}' api)" = "false"
+          curl -fsS http://localhost:10000/health
+          docker logs api 2>&1 | tail -n 20

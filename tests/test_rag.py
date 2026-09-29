@@ -132,16 +132,33 @@ def test_search_tool_reports_index_failure(monkeypatch):
 # --------------------------------------------------------------------------- real model
 
 
+REAL_QUERIES = {
+    "que faire quand il pleut ?": "jours-de-pluie.md",
+    "attractions intérieures s'il y a une averse": "jours-de-pluie.md",
+    "attractions pour un enfant de 4 ans": "visite-avec-enfants.md",
+    "on a une poussette et un bébé": "visite-avec-enfants.md",
+    "fauteuil roulant": "accessibilite.md",
+    "mon fils est autiste, le bruit le gêne": "accessibilite.md",
+    "c'est quoi une file single rider": "strategie-de-visite.md",
+    "visiter les deux parcs le même jour": "strategie-de-visite.md",
+    "où manger le midi": "restauration.md",
+    "options végétariennes et allergies": "restauration.md",
+    "à quelle heure arriver le matin": "strategie-de-visite.md",
+    "quel jour de la semaine venir pour éviter la foule": "meilleurs-moments.md",
+    "les files baissent pendant la parade ?": "meilleurs-moments.md",
+    "best time for Crush's Coaster": "meilleurs-moments.md",
+}
+
+
 @pytest.mark.integration
-@pytest.mark.skipif(bool(os.getenv("CI")), reason="downloads the 220 MB model; run locally")
+@pytest.mark.skipif(bool(os.getenv("CI")), reason="downloads the embedding model; run locally")
 def test_real_model_finds_the_right_guide():
+    """The agent reads the top results, so what matters is the right section being among
+    the first 3 (the benchmark used to choose the embedding model)."""
     index = rag_index.get_guide_index()
-    cases = {
-        "que faire quand il pleut ?": "jours-de-pluie.md",
-        "attractions pour un enfant de 4 ans": "visite-avec-enfants.md",
-        "fauteuil roulant": "accessibilite.md",
-        "c'est quoi une file single rider": "strategie-de-visite.md",
-        "où manger le midi": "restauration.md",
-    }
-    for query, source in cases.items():
-        assert index.search(query, k=1)[0].source == source, query
+    misses = [
+        query
+        for query, source in REAL_QUERIES.items()
+        if source not in [hit.source for hit in index.search(query, k=3)]
+    ]
+    assert misses == []

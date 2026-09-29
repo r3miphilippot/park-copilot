@@ -24,7 +24,7 @@ jobs:
     env:
       # Exposed at job level so the keep-alive step can test it in its `if:`
       # (secrets cannot be referenced directly in conditions).
-      SPACE_URL: ${{ secrets.SPACE_URL }}
+      API_URL: ${{ secrets.API_URL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -38,9 +38,10 @@ jobs:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
         run: uv run --frozen --no-dev --only-group collector python -m collector.collect
 
-      # Pings the Hugging Face Space so it never goes to sleep. Runs even if the
-      # collection failed, never fails the workflow, skipped when SPACE_URL is unset.
-      - name: Keep Hugging Face Space awake
-        if: ${{ always() && env.SPACE_URL != '' }}
+      # Pings the deployed API (free hosting sleeps after ~15 min idle). Runs even if the
+      # collection failed, never fails the workflow, skipped when API_URL is unset.
+      # A cold start can take a minute on the free tier, hence the long timeout.
+      - name: Keep the API awake
+        if: ${{ always() && env.API_URL != '' }}
         continue-on-error: true
-        run: curl --fail --silent --show-error --max-time 30 "${SPACE_URL%/}/health"
+        run: curl --fail --silent --show-error --max-time 90 "${API_URL%/}/health"

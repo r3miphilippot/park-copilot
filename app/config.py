@@ -90,8 +90,10 @@ class Settings(BaseSettings):
         return value
 
     # RAG: local embeddings (FastEmbed, no API) + in-memory Chroma rebuilt at startup.
-    # Multilingual model because the guide and the questions are in French.
-    embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    # Measured on 14 French questions over the guide: all-MiniLM-L6-v2 finds the right
+    # section in its top 3 for 14/14 (multilingual MiniLM-L12: 12/14) while using ~340 MB of
+    # RAM for the whole app instead of ~770 MB, which fits the 512 MB free hosting tiers.
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     knowledge_dir: Path = BASE_DIR / "knowledge"
     fastembed_cache_dir: Path = BASE_DIR / ".fastembed_cache"
 

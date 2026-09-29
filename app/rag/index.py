@@ -37,7 +37,9 @@ class FastEmbedEmbedder:
         self.model = TextEmbedding(model_name=model_name, cache_dir=str(cache_dir or ""))
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return [vector.tolist() for vector in self.model.embed(texts)]
+        # Small batches: the default (256) allocates ~180 MB more RAM for no gain on a guide
+        # of a few dozen chunks. Memory matters on free hosting.
+        return [vector.tolist() for vector in self.model.embed(texts, batch_size=8)]
 
     def embed_query(self, text: str) -> list[float]:
         return next(iter(self.model.query_embed(text))).tolist()

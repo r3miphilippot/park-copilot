@@ -1,4 +1,4 @@
-# Park Copilot API, compatible with Hugging Face Spaces (Docker SDK).
+# Park Copilot API: runs on any Docker host (Render free tier in production).
 #   docker build -t park-copilot .
 #   docker run -p 7860:7860 --env-file .env park-copilot
 FROM python:3.12-slim
@@ -6,7 +6,7 @@ FROM python:3.12-slim
 # uv: fast installs, exactly the versions pinned in uv.lock
 COPY --from=ghcr.io/astral-sh/uv:0.11.16 /uv /bin/uv
 
-# Hugging Face runs containers as a non-root user with uid 1000
+# Non-root user (uid 1000 also matches what Hugging Face Spaces expects)
 RUN useradd --create-home --uid 1000 user
 USER user
 ENV HOME=/home/user \
@@ -23,11 +23,12 @@ RUN uv sync --frozen --no-dev
 COPY --chown=user app ./app
 COPY --chown=user knowledge ./knowledge
 
-# Download the embedding model at build time: no 220 MB download on each cold start
+# Download the embedding model at build time: no download on each cold start
 RUN python -c "from app.config import get_settings; from app.rag.index import FastEmbedEmbedder; \
 s = get_settings(); FastEmbedEmbedder(s.embedding_model, s.fastembed_cache_dir)"
 
 EXPOSE 7860
-# --proxy-headers: the real client IP comes from the Hugging Face proxy (used by rate limiting)
-CMD ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "7860", \
-     "--proxy-headers", "--forwarded-allow-ips", "*"]
+# The host may impose the port through $PORT (Render does); 7860 otherwise.
+# --proxy-headers: the real client IP comes from the host's proxy (used by rate limiting).
+# `exec` makes uvicorn PID 1, so it receives the stop signal and shuts down cleanly.
+CMD ["sh", "-c", "exec uvicorn app.api.main:app --host 0.0.0.0 --port ${PORT:-7860} --proxy-headers --forwarded-allow-ips '*'"]
