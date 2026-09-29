@@ -25,7 +25,9 @@ import sys
 import time
 import typing
 from collections import defaultdict
+from contextlib import contextmanager
 from datetime import datetime
+from unittest.mock import patch
 from pathlib import Path
 from typing import Any
 
@@ -38,7 +40,8 @@ from app.agent.graph import UNAVAILABLE_MESSAGES, build_graph
 from app.clock import frozen_now
 from app.config import PARIS_TZ, get_settings
 from app.llm import LLMRouter, make_provider
-from app.tools import TOOLS, ToolError
+from app.tools import TOOLS, ToolError, get_weather
+from app.tools.history import HourlyProfile
 from evals.checks import Check, Transcript, run_checks
 
 EVALS_DIR = Path(__file__).parent
@@ -165,12 +168,38 @@ def _router(model: str, max_wait_s: float) -> LLMRouter:
     return LLMRouter(make_provider("groq", model, settings), None, max_wait_s=max_wait_s)
 
 
+class FixtureHistoryStore:
+    """History for plan_day: the case's frozen hourly profiles (one fixture per park)."""
+
+    def __init__(self, refs: dict[str, str] | None) -> None:
+        self.refs = refs or {}
+
+    def hourly_profile(self, *, park: str, weekday: int | None) -> HourlyProfile:
+        ref = self.refs.get(park)
+        if ref is None:
+            return HourlyProfile(park=park, basis="none", days=0, waits={})
+        data = json.loads((FIXTURES_DIR / f"{ref}.json").read_text(encoding="utf-8"))
+        return HourlyProfile.model_validate(data)
+
+
+@contextmanager
+def planner_on_fixtures(case_fixtures: dict[str, Any]):
+    """plan_day runs for real (it is what we evaluate) but reads frozen history and weather."""
+    weather = fixture_tool(get_weather, case_fixtures)
+    store = FixtureHistoryStore(case_fixtures.get("hourly_profile"))
+    with (
+        patch("app.tools.planner.get_history_store", lambda: store),
+        patch("app.tools.planner.get_weather", lambda date: weather(date=date)),
+    ):
+        yield
+
+
 async def run_case(case: dict, agent_router: LLMRouter) -> Transcript:
     tools = [fixture_tool(fn, case.get("fixtures", {})) for fn in TOOLS]
     graph = build_graph(agent_router, tools=tools, checkpointer=InMemorySaver())
     now = datetime.fromisoformat(case["now"]).replace(tzinfo=PARIS_TZ)
     config = {"configurable": {"thread_id": case["id"]}, "recursion_limit": 30}
-    with frozen_now(now):
+    with frozen_now(now), planner_on_fixtures(case.get("fixtures", {})):
         state = await graph.ainvoke(
             {"messages": [HumanMessage(case["question"])], "lang": case.get("lang")}, config
         )

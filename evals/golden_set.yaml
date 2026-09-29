@@ -4,7 +4,8 @@
 #   lang:      language picked in the interface (omitted = the question's language)
 #   fixtures:  frozen output per tool (evals/fixtures/<name>.json), or "error:<message>" to
 #              simulate a failure. For get_typical_wait, a mapping per park is allowed.
-#              search_park_guide always runs for real (local RAG, deterministic).
+#              hourly_profile: frozen history per park, read by plan_day (which runs for
+#              real, like search_park_guide and list_rides).
 #   expect:    mode, target date, tools that must / must not / may be called, argument checks
 #   checks:    content assertions (the "no invented wait time" check always runs)
 #   judge:     planning quality graded by another LLM with a simple rubric
@@ -18,19 +19,43 @@
   fixtures:
     get_weather: weather_2026-07-18_dry
     get_typical_wait: typical_saturday_disneyland_park
+    hourly_profile: {disneyland_park: profile_disneyland_park}
   expect:
     mode: planning
     date: "2026-07-18"
-    tools: [get_weather, get_typical_wait]
+    tools: [plan_day]
     forbid_tools: [get_live_wait_times, compare_live_vs_typical]
     args:
-      get_weather: {date: "2026-07-18"}
-      get_typical_wait: {weekday: 5}
+      plan_day: {park: disneyland_park, date: "2026-07-18", preference: family}
   checks:
     mentions_days_of_data: true
     min_timed_steps: 10
     mentions_evening_show: true
+    known_rides_only: true
     must_not_include: [FastPass, Premier Access, Illuminations, coin lecture]
+  judge: true
+
+- id: plan_tomorrow_thrill_830
+  category: planning
+  now: "2026-07-14T18:00"
+  question: "J'aimerais venir demain au parc, à partir de 8h30. Tu peux me conseiller pour passer une journée en faisant le moins d'attente et le plus d'attractions à sensations ?"
+  fixtures:
+    get_weather: weather_2026-07-15_dry
+    hourly_profile:
+      disneyland_park: profile_disneyland_park
+      adventure_world: profile_adventure_world
+  expect:
+    mode: planning
+    date: "2026-07-15"
+    tools: [plan_day]
+    forbid_tools: [get_live_wait_times, compare_live_vs_typical]
+    args:
+      plan_day: {date: "2026-07-15", preference: thrill}
+  checks:
+    min_timed_steps: 10
+    known_rides_only: true
+    mentions_days_of_data: true
+    must_include_any: [Big Thunder, Hyperspace, Indiana Jones, Avengers, Tower of Terror, RC Racer]
   judge: true
 
 - id: plan_rainy_saturday
@@ -40,15 +65,17 @@
   fixtures:
     get_weather: weather_2026-07-18_rainy
     get_typical_wait: typical_saturday_adventure_world
+    hourly_profile: {adventure_world: profile_adventure_world}
   expect:
     mode: planning
     date: "2026-07-18"
-    tools: [get_weather]
+    tools: [plan_day]
     forbid_tools: [get_live_wait_times, compare_live_vs_typical]
     args:
-      get_weather: {date: "2026-07-18"}
+      plan_day: {park: adventure_world, date: "2026-07-18"}
   checks:
     mentions_rain: true
+    known_rides_only: true
     must_include_any: [Ratatouille, "Crush", Tower of Terror, Frozen Ever After, Avengers, Spider-Man]
   judge: true
 
@@ -62,12 +89,16 @@
       disneyland_park: typical_wednesday_disneyland_park
       adventure_world: typical_wednesday_adventure_world
       default: typical_wednesday_disneyland_park
+    hourly_profile:
+      disneyland_park: profile_disneyland_park
+      adventure_world: profile_adventure_world
   expect:
     mode: planning
     date: "2026-07-15"
+    tools: [plan_day]
     forbid_tools: [get_live_wait_times, compare_live_vs_typical]
     args:
-      get_weather: {date: "2026-07-15"}
+      plan_day: {date: "2026-07-15"}
   checks:
     mentions_days_of_data: true
   judge: true

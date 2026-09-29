@@ -56,3 +56,7 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# The ride catalogue is a data table: one ride per line reads better than wrapped lines.
+"app/tools/rides.py" = ["E501"]

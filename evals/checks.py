@@ -46,6 +46,29 @@ DAYS_RE = re.compile(r"(\d+)\s*(?:jours?|days?)\b", re.IGNORECASE)
 # A timed step of a plan: a line starting with "09:30", "9h30", "- 14:00", "**10:15**"...
 TIMED_STEP_RE = re.compile(r"^\W*\d{1,2}\s*[:h]\s*\d{2}\b", re.MULTILINE)
 EVENING_SHOW_WORDS = ["spectacle", "show", "nocturne", "feux d'artifice", "fireworks"]
+
+# Keywords identifying every ride of the catalogue (app/tools/rides.py), as an LLM writes them.
+RIDE_KEYWORDS = [
+    "indiana jones", "pirates", "robinson", "adventure isle", "aladdin", "galleon",
+    "hyperspace", "star tours", "buzz", "autopia", "orbitron", "nautilus", "philharmagic",
+    "starport", "peter pan", "small world", "dumbo", "blanche-neige", "pinocchio", "casey",
+    "contes de fées", "carrousel", "tea cups", "alice", "tanière", "mickey", "princess",
+    "big thunder", "phantom manor", "riverboat", "keelboats", "playground", "main street",
+    "railroad", "avengers", "spider-man", "tower of terror", "crush", "ratatouille",
+    "rc racer", "toy soldiers", "slinky", "cars", "tapis volants", "flying carpets", "frozen",
+    "raiponce",
+]  # fmt: skip
+# Timed steps that are not rides.
+NON_RIDE_STEP_WORDS = [
+    "arrivée", "arrival", "entrée", "contrôle", "security", "déjeuner", "lunch", "dîner",
+    "dinner", "repas", "meal", "pause", "break", "spectacle", "show", "parade", "fermeture",
+    "closing", "sortie", "départ", "leave", "fin de", "end of", "ouverture", "opening",
+]  # fmt: skip
+# Rides LLMs invented in real answers: other Disney parks, or wrong names.
+INVENTED_RIDE_PATTERNS = [
+    r"(?<!hyper)space mountain", r"jungle cruise", r"dernière croisade", r"last crusade",
+    r"amazing adventures", r"haunted mansion", r"splash mountain", r"matterhorn",
+]  # fmt: skip
 NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
 
 NO_HISTORY_WORDS = [
@@ -90,7 +113,7 @@ def days_values(outputs: list[str]) -> set[int]:
     def walk(node: Any) -> None:
         if isinstance(node, dict):
             for key, value in node.items():
-                if key in {"days_observed", "days"} and isinstance(value, int):
+                if key in {"days_observed", "days", "days_of_data"} and isinstance(value, int):
                     found.add(value)
                 walk(value)
         elif isinstance(node, list):
@@ -207,6 +230,8 @@ def check_content(t: Transcript, checks_spec: dict) -> list[Check]:
                 f"{steps} timed steps",
             )  # fmt: skip
         )
+    if checks_spec.get("known_rides_only"):
+        checks.append(check_known_rides(answer))
     if checks_spec.get("mentions_evening_show"):
         hit = _contains_any(answer, EVENING_SHOW_WORDS)
         checks.append(Check("content", "plans the evening show", bool(hit), f"matched {hit!r}"))
@@ -227,6 +252,21 @@ def check_content(t: Transcript, checks_spec: dict) -> list[Check]:
         got = detect_language(answer)
         checks.append(Check("language", f"answers in {lang}", got == lang, f"detected {got}"))
     return checks
+
+
+def check_known_rides(answer: str) -> Check:
+    """Every timed step names a real ride of the catalogue (or a meal, the arrival, a show),
+    and no ride from another Disney park appears anywhere."""
+    text = normalize(answer)
+    problems = [p for p in INVENTED_RIDE_PATTERNS if re.search(p, text)]
+    for line in text.splitlines():
+        if not TIMED_STEP_RE.match(line):
+            continue
+        step = TIMED_STEP_RE.sub("", line, count=1)
+        if not any(k in step for k in RIDE_KEYWORDS + NON_RIDE_STEP_WORDS):
+            problems.append(step.strip(" -–—*:|")[:60])
+    return Check("no_hallucination", "only rides of the catalogue", not problems,
+                 f"unknown: {problems}")  # fmt: skip
 
 
 def run_checks(t: Transcript, case: dict) -> list[Check]:

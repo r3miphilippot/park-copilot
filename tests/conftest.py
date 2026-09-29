@@ -3,7 +3,7 @@ from datetime import date
 import pytest
 
 from app.tools import history, live, weather
-from app.tools.history import DataCoverage, RideStats
+from app.tools.history import DataCoverage, HourlyProfile, RideStats
 
 
 @pytest.fixture(autouse=True)
@@ -16,15 +16,30 @@ def _clear_tool_caches():
 class FakeHistoryStore:
     """In-memory HistoryStore: returns preset stats and records the filters it received."""
 
-    def __init__(self, stats: list[RideStats], days: int = 30) -> None:
+    def __init__(
+        self,
+        stats: list[RideStats],
+        days: int = 30,
+        *,
+        missing_weekdays: set[int] = frozenset(),
+        profile: HourlyProfile | None = None,
+    ) -> None:
         self.stats = stats
         self.days = days
+        self.missing_weekdays = missing_weekdays  # weekdays without any data yet
+        self.profile = profile
         self.calls: list[dict] = []
 
     def ride_stats(self, **filters) -> list[RideStats]:
         self.calls.append(filters)
+        if filters.get("weekday") in self.missing_weekdays:
+            return []
         ride = (filters.get("ride") or "").lower()
         return [s for s in self.stats if ride in s.ride.lower()]
+
+    def hourly_profile(self, *, park: str, weekday: int | None) -> HourlyProfile:
+        self.calls.append({"profile": park, "weekday": weekday})
+        return self.profile or HourlyProfile(park=park, basis="none", days=0, waits={})
 
     def coverage(self) -> DataCoverage:
         if not self.days:
@@ -46,6 +61,7 @@ def use_store(monkeypatch):
     def install(store: FakeHistoryStore) -> FakeHistoryStore:
         monkeypatch.setattr(history, "get_history_store", lambda: store)
         monkeypatch.setattr("app.tools.compare.get_history_store", lambda: store)
+        monkeypatch.setattr("app.tools.planner.get_history_store", lambda: store)
         return store
 
     return install

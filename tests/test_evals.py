@@ -6,9 +6,14 @@ import pytest
 import yaml
 
 from app.tools import TOOLS, ToolError
+from app.tools.history import HourlyProfile
+from app.tools.rides import CATALOG, RIDES_BY_ID
+
+SINGLE_RIDER_IDS = {r.single_rider_id for r in CATALOG if r.single_rider_id}
 from evals.checks import (
     Transcript,
     check_content,
+    check_known_rides,
     check_no_invented_waits,
     check_tools,
     claimed_waits,
@@ -81,6 +86,28 @@ def test_full_day_plan_checks():
     assert [c.passed for c in check_content(transcript(short), spec)] == [False, False]
 
 
+def test_known_rides_only():
+    # Lines from a real answer that mixed in rides of other Disney parks.
+    tester_answer = (
+        "09:30 – Space Mountain (Disneyland Park)\n"
+        "10:00 – Indiana Jones et la dernière croisade (Adventure World)\n"
+        "13:30 – Jungle Cruise (Adventure World)\n"
+        "11:30 – Lunch rapide"
+    )
+    good_plan = (
+        "08:30 – Arrivée et contrôles de sécurité\n"
+        "09:12 – Star Wars Hyperspace Mountain (Single Rider, ≈ 5 min)\n"
+        "09:40 – Indiana Jones™ and the Temple of Peril (≈ 10 min)\n"
+        "11:36 – Déjeuner\n"
+        "**20:40** – Big Thunder Mountain (≈ 58 min)\n"
+        "22:00 – Spectacle nocturne (horaire à vérifier)"
+    )
+    bad = check_known_rides(tester_answer)
+    assert not bad.passed
+    assert "jungle cruise" in bad.detail and "space mountain" in bad.detail
+    assert check_known_rides(good_plan).passed  # "Hyperspace Mountain" is not "Space Mountain"
+
+
 def test_forbidden_mentions_and_patterns():
     spec = {"must_not_include": ["FastPass"], "must_not_match": [r"\d+\s*cm"]}
     checks = check_content(transcript("Prends un FastPass, taille minimale 102 cm"), spec)
@@ -92,9 +119,16 @@ def test_forbidden_mentions_and_patterns():
 
 @pytest.mark.parametrize("path", sorted(FIXTURES_DIR.glob("*.json")), ids=lambda p: p.stem)
 def test_every_fixture_matches_its_tool_model(path):
+    kind = path.stem.split("_")[0]
+    if kind == "profile":  # history read by plan_day, not a tool output
+        profile = HourlyProfile.model_validate_json(path.read_text(encoding="utf-8"))
+        assert profile.waits and all(
+            r in RIDES_BY_ID or r in SINGLE_RIDER_IDS for r in profile.waits
+        )
+        return
     prefix = {"typical": "get_typical_wait", "weather": "get_weather",
               "compare": "compare_live_vs_typical", "live": "get_live_wait_times"}  # fmt: skip
-    tool = TOOLS_BY_NAME[prefix[path.stem.split("_")[0]]]
+    tool = TOOLS_BY_NAME[prefix[kind]]
     assert not isinstance(load_fixture(tool, path.stem), ToolError)
 
 

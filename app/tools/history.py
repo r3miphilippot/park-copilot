@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from datetime import date, datetime
 from functools import lru_cache
-from typing import Annotated, Protocol
+from typing import Annotated, Literal, Protocol
 
 from pydantic import BaseModel, Field
 from pymongo.collection import Collection
@@ -40,9 +40,21 @@ class DataCoverage(BaseModel):
 
 class TypicalWait(BaseModel):
     filters: dict[str, str | int]
+    # "exact" = the requested filters; otherwise they were widened because the requested
+    # weekday has no data yet (young history): "same_hour_all_days" or "all_days".
+    basis: str = "exact"
     coverage: DataCoverage
     rides: list[RideStats]  # longest average wait first
     note: str | None = None
+
+
+class HourlyProfile(BaseModel):
+    """Usual wait per ride and per hour of the day, for one park (used by the day planner)."""
+
+    park: str
+    basis: Literal["same_weekday", "all_days", "none"]
+    days: int  # distinct days behind the numbers
+    waits: dict[int, dict[int, float]]  # ride_id -> {hour: average wait in minutes}
 
 
 class HistoryStore(Protocol):
@@ -57,6 +69,8 @@ class HistoryStore(Protocol):
     ) -> list[RideStats]: ...
 
     def coverage(self) -> DataCoverage: ...
+
+    def hourly_profile(self, *, park: str, weekday: int | None) -> HourlyProfile: ...
 
 
 # Day of a snapshot, in Paris time (a visit at 00:30 UTC in summer belongs to the next day).
@@ -153,6 +167,39 @@ class MongoHistoryStore:
         self._coverage_cache.set("coverage", result)
         return result
 
+    def hourly_profile(self, *, park: str, weekday: int | None) -> HourlyProfile:
+        """Same weekday if it has data, otherwise every day collected so far."""
+        for basis, day in (("same_weekday", weekday), ("all_days", None)):
+            if basis == "same_weekday" and weekday is None:
+                continue
+            match: dict = {"park": park, "is_open": True, "wait_time": {"$ne": None}}
+            if day is not None:
+                match["weekday"] = day
+            rows = list(
+                self.collection.aggregate(
+                    [
+                        {"$match": match},
+                        {
+                            "$group": {
+                                "_id": {"ride": "$ride_id", "hour": "$hour"},
+                                "avg": {"$avg": "$wait_time"},
+                                "days": {"$addToSet": _PARIS_DAY},
+                            }
+                        },
+                    ]
+                )
+            )
+            if not rows:
+                continue
+            waits: dict[int, dict[int, float]] = {}
+            days: set[str] = set()
+            for row in rows:
+                ride_hours = waits.setdefault(row["_id"]["ride"], {})
+                ride_hours[row["_id"]["hour"]] = round(row["avg"], 1)
+                days.update(row["days"])
+            return HourlyProfile(park=park, basis=basis, days=len(days), waits=waits)
+        return HourlyProfile(park=park, basis="none", days=0, waits={})
+
 
 @lru_cache
 def get_history_store() -> HistoryStore:
@@ -183,6 +230,19 @@ def get_typical_wait(
     rides = store.ride_stats(park=park, ride=ride, weekday=weekday, hour=hour)
     coverage = store.coverage()
 
+    # A young history may not cover the requested weekday yet: rather than "no data", widen
+    # the filters step by step and say so.
+    basis = "exact"
+    if not rides and weekday is not None and coverage.days:
+        for basis, wider_hour in (("same_hour_all_days", hour), ("all_days", None)):
+            if basis == "same_hour_all_days" and hour is None:
+                continue
+            rides = store.ride_stats(park=park, ride=ride, weekday=None, hour=wider_hour)
+            if rides:
+                break
+        else:
+            basis = "exact"
+
     filters: dict[str, str | int] = {}
     if ride:
         filters["ride"] = ride
@@ -198,6 +258,11 @@ def get_typical_wait(
         note = "No history collected yet: rely on the park guide, do not invent wait times."
     elif not rides:
         note = "No observation matches these filters: say so, and rely on the park guide."
+    elif basis != "exact":
+        note = (
+            f"No data yet for {WEEKDAYS[weekday]}: these are averages over all the days "
+            f"collected so far ({coverage.days} day(s)). Say so: they are rough estimates."
+        )
     elif coverage.days < 14:
         note = f"Only {coverage.days} day(s) of history: estimates are indicative only."
-    return TypicalWait(filters=filters, coverage=coverage, rides=rides, note=note)
+    return TypicalWait(filters=filters, basis=basis, coverage=coverage, rides=rides, note=note)

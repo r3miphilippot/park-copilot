@@ -157,7 +157,8 @@ async def test_english_unavailable_message():
 def test_system_prompt_planning_mentions_target_weekday():
     prompt = build_system_prompt(TUESDAY_1030, "planning", date(2026, 7, 18))
     assert "mardi 14 juillet 2026, 10:30" in prompt
-    assert "PLANIFICATION pour le samedi 18 juillet 2026 (weekday=5)" in prompt
+    assert "PLANIFICATION pour le samedi 18 juillet 2026 (date=2026-07-18, weekday=5)" in prompt
+    assert "`plan_day` avec date=2026-07-18" in prompt
     assert "2026-07-18" in prompt
 
 

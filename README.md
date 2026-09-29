@@ -25,9 +25,12 @@ date in Paris:
 | **Planning** | a future date ("we're coming on Saturday") | usual waits for that weekday, weather forecast, guide. **Never live waits.** |
 | **In the park** | today, now ("what's quiet right now?") | live waits compared with the usual wait at this weekday and hour |
 
-> *"Je viens samedi avec des enfants de 5 et 9 ans, tu me fais un programme ?"*
-> → mode detection (Saturday = 2026-07-18) → weather + usual Saturday waits + guide → a timed
-> plan from opening to the night show, each wait tagged with the number of days of data behind it.
+> *"J'aimerais venir demain à partir de 8h30 : le moins d'attente et le plus d'attractions à
+> sensations ?"*
+> → mode detection (tomorrow = a Wednesday) → `plan_day` optimizes the day from the usual wait
+> of every ride at every hour, walking times and the weather → a timed plan from arrival to the
+> night show: thrill rides first while queues are short, Single Rider lines if the visitor
+> accepts riding apart, each wait tagged with the number of days of data behind it.
 
 ## Architecture
 
@@ -46,6 +49,8 @@ flowchart LR
     T3["compare_live_vs_typical"]
     T4["get_weather"]
     T5["search_park_guide"]
+    T6["list_rides"]
+    T7["plan_day<br/>(optimizer)"]
   end
 
   QT --> T1
@@ -53,6 +58,7 @@ flowchart LR
   T1 & T2 --> T3
   OM[("Open-Meteo")] --> T4
   KB["knowledge/*.md<br/>FastEmbed + Chroma"] --> T5
+  DB & T4 & T6 --> T7
 
   tools --> AGENT["LangGraph agent"]
   tools --> MCP["MCP server (stdio)"]
@@ -82,6 +88,17 @@ flowchart LR
 
 ### Design decisions
 
+- **The LLM orchestrates, the code optimizes.** "Most rides, least waiting" is a scheduling
+  problem, and early versions showed LLMs doing it badly (rides from other Disney parks, hops
+  between parks every 30 minutes). `plan_day` is a deterministic planner: slot by slot it takes
+  the ride with the best **value per minute spent** (value = what the visitor wants, e.g. a
+  thrill ride for a thrill seeker; minutes = expected wait at that hour + walk + ride), favours
+  rides that are cheap now but will get worse, keeps indoor rides for the rainy hours, uses
+  Single Rider lines when allowed and leaves out rides not seen open recently (probably closed).
+  The LLM only explains the plan.
+- **A closed list of rides.** `list_rides` is the official catalogue (ids and names from
+  Queue-Times, curated attributes: land, indoor, thrill level, Single Rider). The agent may only
+  cite these rides, and an eval check fails if a plan names anything else.
 - **The LLM proposes, the code decides.** `detect_mode` asks the LLM for a mode and a date, then
   plain Python enforces the rules: a future date is always *planning*. In planning mode the live
   tools are **not even offered** to the LLM, so "never use live waits for a future date" holds in
@@ -130,7 +147,7 @@ app/
   config.py         settings (pydantic-settings), park IDs, Paris timezone
   clock.py          single source of "now" (frozen in tests and evals)
   llm.py            LLM providers, fallback router, retry-after handling
-  tools/            the 5 tools, defined once (agent + MCP)
+  tools/            the 7 tools, defined once (agent + MCP), incl. ride catalogue and planner
   rag/              markdown chunking by section, FastEmbed + Chroma index
   agent/            LangGraph graph, prompts, terminal CLI
   api/              FastAPI app, rate limits, chat page (static/index.html)
@@ -209,7 +226,7 @@ curl -N -X POST http://localhost:7860/chat -H "Content-Type: application/json" \
 
 ## Evaluation
 
-`evals/` holds a **golden set of 18 cases**: planning, in-park, general questions and
+`evals/` holds a **golden set of 19 cases**: planning, in-park, general questions and
 hallucination baits (asking for an exact wait that does not exist in the data, or a minimum height
 that is not in the guide). Each case sets:
 
@@ -285,7 +302,7 @@ or the evals; the report is published in the job summary.
 
 ## MCP
 
-The agent's 5 tools are also exposed as an [MCP](https://modelcontextprotocol.io) server
+The agent's 7 tools are also exposed as an [MCP](https://modelcontextprotocol.io) server
 (stdio transport), built with the official `mcp` Python SDK (its high-level API, FastMCP, is
 called `MCPServer` since v2). The functions are the same ones the LangGraph agent uses, imported
 from `app.tools`: they are defined once.
@@ -297,6 +314,8 @@ from `app.tools`: they are defined once.
 | `compare_live_vs_typical(park)` | live wait vs usual wait at this weekday and hour (previous days only) |
 | `get_weather(date)` | hourly forecast at the resort, rainy hours (Open-Meteo, cached 1 h) |
 | `search_park_guide(query, k?)` | relevant passages of the visit guide (RAG) |
+| `list_rides(park)` | the official ride catalogue: land, indoor, thrill level, Single Rider |
+| `plan_day(park, date, start?, end?, preference?, single_rider?)` | an optimized, timed day plan (most rides, least waiting) |
 
 Every tool is read-only. Failures (API down, date out of range, invalid argument) come back as
 MCP error results (`isError: true`) with a readable reason, never as a crash.
@@ -377,7 +396,7 @@ on the cluster and no password rotation on the app user.
 - **Free tiers.** 8,000 tokens per minute on Groq limits concurrent chats (the fallback model
   absorbs peaks); Render sleeps when idle and cold-starts in about a minute; conversations are
   kept in memory, in a single process, and lost on restart.
-- **Evals are small** (18 cases) and LLM output varies between runs: several runs are needed for
+- **Evals are small** (19 cases) and LLM output varies between runs: several runs are needed for
   a solid comparison.
 - The GitHub API version used by the external trigger is scheduled for sunset in March 2028.
 
