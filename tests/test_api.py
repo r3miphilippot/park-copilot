@@ -48,12 +48,12 @@ async def chat(c, message="Un plan pour samedi ?", thread_id=None, ip="1.2.3.4")
 
 @pytest.fixture(autouse=True)
 def _no_mongo(monkeypatch):
-    """/metrics asks MongoDB for the number of days: keep unit tests offline."""
-    monkeypatch.setattr("app.api.main._history_days", _fake_history_days)
+    """/metrics asks MongoDB for the size of the history: keep unit tests offline."""
+    monkeypatch.setattr("app.api.main._history_summary", _fake_history_summary)
 
 
-async def _fake_history_days():
-    return 12
+async def _fake_history_summary():
+    return {"history_days": 12, "history_snapshots": 34_000, "last_snapshot_at": "2026-07-14"}
 
 
 # --------------------------------------------------------------------------- chat
@@ -203,7 +203,7 @@ async def test_metrics_after_a_request():
     assert metrics["requests"] == 1 and metrics["error_rate"] == 0.0
     assert metrics["latency_ms"]["p50"] is not None and metrics["latency_ms"]["samples"] == 1
     assert metrics["tool_calls"] == {"search_park_guide": 1}
-    assert metrics["history_days"] == 12
+    assert metrics["history_days"] == 12 and metrics["history_snapshots"] == 34_000
     assert metrics["llm_fallback_rate"] == 0.0
 
 

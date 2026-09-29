@@ -163,7 +163,7 @@ def create_app(
     @app.get("/metrics")
     async def metrics() -> dict:
         snapshot = app.state.metrics.snapshot()
-        snapshot["history_days"] = await _history_days()
+        snapshot.update(await _history_summary())
         snapshot["llm"] = {
             "primary": f"{settings.llm_provider}:{settings.llm_model}",
             "fallback": f"{settings.fallback_provider}:{settings.fallback_model}",
@@ -216,16 +216,26 @@ def _build_default_graph(settings: Settings):
         return None
 
 
-async def _history_days() -> int | None:
+async def _history_summary() -> dict[str, Any]:
+    """Size of the collected history: stable numbers, unlike the in-memory request counters
+    that restart at 0 on each deploy (shown on the portfolio)."""
+    from app.db import get_snapshots_collection
     from app.tools.history import get_history_store
 
+    def read() -> dict[str, Any]:
+        collection = get_snapshots_collection()
+        last = collection.find_one({}, {"fetched_at": 1}, sort=[("fetched_at", -1)])
+        return {
+            "history_days": get_history_store().coverage().days,
+            "history_snapshots": collection.estimated_document_count(),  # metadata, cheap
+            "last_snapshot_at": last["fetched_at"].isoformat() if last else None,
+        }
+
     try:
-        coverage = await asyncio.wait_for(
-            asyncio.to_thread(lambda: get_history_store().coverage()), timeout=5
-        )
-        return coverage.days
+        # 10 s covers a cold MongoDB connection; once warm (startup warm-up) it takes ~10 ms.
+        return await asyncio.wait_for(asyncio.to_thread(read), timeout=10)
     except Exception:
-        return None
+        return {"history_days": None, "history_snapshots": None, "last_snapshot_at": None}
 
 
 def _message_response(

@@ -8,8 +8,6 @@ import yaml
 from app.tools import TOOLS, ToolError
 from app.tools.history import HourlyProfile
 from app.tools.rides import CATALOG, RIDES_BY_ID
-
-SINGLE_RIDER_IDS = {r.single_rider_id for r in CATALOG if r.single_rider_id}
 from evals.checks import (
     Transcript,
     check_content,
@@ -24,6 +22,7 @@ from evals.run_evals import FIXTURES_DIR, fixture_tool, load_fixture
 
 GOLDEN = yaml.safe_load((Path("evals") / "golden_set.yaml").read_text(encoding="utf-8"))
 TOOLS_BY_NAME = {fn.__name__: fn for fn in TOOLS}
+SINGLE_RIDER_IDS = {r.single_rider_id for r in CATALOG if r.single_rider_id}
 
 
 def transcript(answer: str, outputs: list[str] | None = None, calls=None) -> Transcript:
