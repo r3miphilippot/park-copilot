@@ -1,0 +1,13 @@
+{
+  "park": "disneyland_park",
+  "at": "2026-07-18T23:30:00+02:00",
+  "weekday": 5,
+  "hour": 23,
+  "coverage": {
+    "days": 42,
+    "first_day": "2026-05-20",
+    "last_day": "2026-07-17"
+  },
+  "rides": [],
+  "note": "The park is closed right now (no ride open)."
+}

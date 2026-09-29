@@ -62,10 +62,12 @@ def compare_live_vs_typical(park: ParkKey) -> LiveVsTypical | ToolError:
 
     now = now_paris()
     store = get_history_store()
-    typical = {
-        s.ride_id: s
-        for s in store.ride_stats(park=park, ride=None, weekday=now.weekday(), hour=now.hour)
-    }
+    # "Usual" = previous days only: today's snapshots are the live data being judged.
+    start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    stats = store.ride_stats(
+        park=park, ride=None, weekday=now.weekday(), hour=now.hour, before=start_of_today
+    )
+    typical = {s.ride_id: s for s in stats}
 
     rows = []
     for r in live.rides:

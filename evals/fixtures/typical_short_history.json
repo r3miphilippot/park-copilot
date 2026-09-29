@@ -1,0 +1,214 @@
+{
+  "filters": {
+    "weekday": "5 (Saturday)",
+    "park": "disneyland_park"
+  },
+  "coverage": {
+    "days": 3,
+    "first_day": "2026-05-20",
+    "last_day": "2026-07-13"
+  },
+  "rides": [
+    {
+      "ride": "Peter Pan's Flight",
+      "ride_id": 26,
+      "park": "disneyland_park",
+      "land": "Fantasyland",
+      "avg_wait": 55.0,
+      "median_wait": 55.0,
+      "observations": 144,
+      "days_observed": 3
+    },
+    {
+      "ride": "Big Thunder Mountain",
+      "ride_id": 11,
+      "park": "disneyland_park",
+      "land": "Frontierland",
+      "avg_wait": 45.0,
+      "median_wait": 45.0,
+      "observations": 144,
+      "days_observed": 3
+    },
+    {
+      "ride": "Star Wars Hyperspace Mountain",
+      "ride_id": 7,
+      "park": "disneyland_park",
+      "land": "Discoveryland",
+      "avg_wait": 40.0,
+      "median_wait": 40.0,
+      "observations": 144,
+      "days_observed": 3
+    },
+    {
+      "ride": "Dumbo the Flying Elephant",
+      "ride_id": 21,
+      "park": "disneyland_park",
+      "land": "Fantasyland",
+      "avg_wait": 30.0,
+      "median_wait": 30.0,
+      "observations": 144,
+      "days_observed": 3
+    },
+    {
+      "ride": "Buzz Lightyear Laser Blast",
+      "ride_id": 5,
+      "park": "disneyland_park",
+      "land": "Discoveryland",
+      "avg_wait": 30.0,
+      "median_wait": 30.0,
+      "observations": 144,
+      "days_observed": 3
+    },
+    {
+      "ride": "Indiana Jones™ and the Temple of Peril",
+      "ride_id": 2,
+      "park": "disneyland_park",
+      "land": "Adventureland",
+      "avg_wait": 25.0,
+      "median_wait": 25.0,
+      "observations": 144,
+      "days_observed": 3
+    },
+    {
+      "ride": "Autopia, presented by Avis",
+      "ride_id": 4,
+      "park": "disneyland_park",
+      "land": "Discoveryland",
+      "avg_wait": 25.0,
+      "median_wait": 25.0,
+      "observations": 144,
+      "days_observed": 3
+    },
+    {
+      "ride": "Orbitron®",
+      "ride_id": 8,
+      "park": "disneyland_park",
+      "land": "Discoveryland",
+      "avg_wait": 25.0,
+      "median_wait": 25.0,
+      "observations": 144,
+      "days_observed": 3
+    },
+    {
+      "ride": "Pirates of the Caribbean",
+      "ride_id": 3,
+      "park": "disneyland_park",
+      "land": "Adventureland",
+      "avg_wait": 20.0,
+      "median_wait": 20.0,
+      "observations": 144,
+      "days_observed": 3
+    },
+    {
+      "ride": "Phantom Manor",
+      "ride_id": 12,
+      "park": "disneyland_park",
+      "land": "Frontierland",
+      "avg_wait": 20.0,
+      "median_wait": 20.0,
+      "observations": 144,
+      "days_observed": 3
+    },
+    {
+      "ride": "Star Tours: The Adventures Continue*",
+      "ride_id": 9,
+      "park": "disneyland_park",
+      "land": "Discoveryland",
+      "avg_wait": 20.0,
+      "median_wait": 20.0,
+      "observations": 144,
+      "days_observed": 3
+    },
+    {
+      "ride": "Blanche-Neige et les Sept Nains®",
+      "ride_id": 16,
+      "park": "disneyland_park",
+      "land": "Fantasyland",
+      "avg_wait": 20.0,
+      "median_wait": 20.0,
+      "observations": 144,
+      "days_observed": 3
+    },
+    {
+      "ride": "Le Pays des Contes de Fées, presented by Vittel",
+      "ride_id": 19,
+      "park": "disneyland_park",
+      "land": "Fantasyland",
+      "avg_wait": 20.0,
+      "median_wait": 20.0,
+      "observations": 144,
+      "days_observed": 3
+    },
+    {
+      "ride": "\"it's a small world\"",
+      "ride_id": 14,
+      "park": "disneyland_park",
+      "land": "Fantasyland",
+      "avg_wait": 15.0,
+      "median_wait": 15.0,
+      "observations": 144,
+      "days_observed": 3
+    },
+    {
+      "ride": "Mad Hatter's Tea Cups",
+      "ride_id": 22,
+      "park": "disneyland_park",
+      "land": "Fantasyland",
+      "avg_wait": 15.0,
+      "median_wait": 15.0,
+      "observations": 144,
+      "days_observed": 3
+    },
+    {
+      "ride": "Casey Jr. – le Petit Train du Cirque",
+      "ride_id": 17,
+      "park": "disneyland_park",
+      "land": "Fantasyland",
+      "avg_wait": 15.0,
+      "median_wait": 15.0,
+      "observations": 144,
+      "days_observed": 3
+    },
+    {
+      "ride": "Les Voyages de Pinocchio",
+      "ride_id": 24,
+      "park": "disneyland_park",
+      "land": "Fantasyland",
+      "avg_wait": 15.0,
+      "median_wait": 15.0,
+      "observations": 144,
+      "days_observed": 3
+    },
+    {
+      "ride": "Le Carrousel de Lancelot",
+      "ride_id": 18,
+      "park": "disneyland_park",
+      "land": "Fantasyland",
+      "avg_wait": 10.0,
+      "median_wait": 10.0,
+      "observations": 144,
+      "days_observed": 3
+    },
+    {
+      "ride": "Les Mystères du Nautilus",
+      "ride_id": 6,
+      "park": "disneyland_park",
+      "land": "Discoveryland",
+      "avg_wait": 10.0,
+      "median_wait": 10.0,
+      "observations": 144,
+      "days_observed": 3
+    },
+    {
+      "ride": "Mickey’s PhilharMagic",
+      "ride_id": 10,
+      "park": "disneyland_park",
+      "land": "Discoveryland",
+      "avg_wait": 10.0,
+      "median_wait": 10.0,
+      "observations": 144,
+      "days_observed": 3
+    }
+  ],
+  "note": "Only 3 day(s) of history: estimates are indicative only."
+}

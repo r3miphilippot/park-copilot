@@ -1,0 +1,144 @@
+{
+  "filters": {
+    "weekday": "5 (Saturday)",
+    "park": "adventure_world"
+  },
+  "coverage": {
+    "days": 42,
+    "first_day": "2026-05-20",
+    "last_day": "2026-07-13"
+  },
+  "rides": [
+    {
+      "ride": "Crush's Coaster",
+      "ride_id": 41,
+      "park": "adventure_world",
+      "land": "Toon Studio",
+      "avg_wait": 70.0,
+      "median_wait": 70.0,
+      "observations": 288,
+      "days_observed": 6
+    },
+    {
+      "ride": "Frozen Ever After",
+      "ride_id": 10870,
+      "park": "adventure_world",
+      "land": "World of Frozen",
+      "avg_wait": 60.0,
+      "median_wait": 60.0,
+      "observations": 288,
+      "days_observed": 6
+    },
+    {
+      "ride": "Ratatouille : L’Aventure Totalement Toquée de Rémy",
+      "ride_id": 44,
+      "park": "adventure_world",
+      "land": "Toon Studio",
+      "avg_wait": 45.0,
+      "median_wait": 45.0,
+      "observations": 288,
+      "days_observed": 6
+    },
+    {
+      "ride": "The Twilight Zone Tower of Terror",
+      "ride_id": 37,
+      "park": "adventure_world",
+      "land": "Production Courtyard",
+      "avg_wait": 40.0,
+      "median_wait": 40.0,
+      "observations": 288,
+      "days_observed": 6
+    },
+    {
+      "ride": "Avengers Assemble: Flight Force",
+      "ride_id": 10848,
+      "park": "adventure_world",
+      "land": "Marvel Avengers Campus",
+      "avg_wait": 35.0,
+      "median_wait": 35.0,
+      "observations": 288,
+      "days_observed": 6
+    },
+    {
+      "ride": "Spider-Man W.E.B. Adventure",
+      "ride_id": 10849,
+      "park": "adventure_world",
+      "land": "Marvel Avengers Campus",
+      "avg_wait": 30.0,
+      "median_wait": 30.0,
+      "observations": 288,
+      "days_observed": 6
+    },
+    {
+      "ride": "RC Racer",
+      "ride_id": 43,
+      "park": "adventure_world",
+      "land": "Toon Studio",
+      "avg_wait": 30.0,
+      "median_wait": 30.0,
+      "observations": 288,
+      "days_observed": 6
+    },
+    {
+      "ride": "Toy Soldiers Parachute Drop",
+      "ride_id": 45,
+      "park": "adventure_world",
+      "land": "Toon Studio",
+      "avg_wait": 30.0,
+      "median_wait": 30.0,
+      "observations": 288,
+      "days_observed": 6
+    },
+    {
+      "ride": "Slinky® Dog Zigzag Spin",
+      "ride_id": 46,
+      "park": "adventure_world",
+      "land": "Toon Studio",
+      "avg_wait": 25.0,
+      "median_wait": 25.0,
+      "observations": 288,
+      "days_observed": 6
+    },
+    {
+      "ride": "Raiponce Tangled Spin",
+      "ride_id": 10871,
+      "park": "adventure_world",
+      "land": "World of Frozen",
+      "avg_wait": 25.0,
+      "median_wait": 25.0,
+      "observations": 288,
+      "days_observed": 6
+    },
+    {
+      "ride": "Cars ROAD TRIP",
+      "ride_id": 40,
+      "park": "adventure_world",
+      "land": "Toon Studio",
+      "avg_wait": 20.0,
+      "median_wait": 20.0,
+      "observations": 288,
+      "days_observed": 6
+    },
+    {
+      "ride": "Les Tapis Volants - Flying Carpets Over Agrabah®",
+      "ride_id": 42,
+      "park": "adventure_world",
+      "land": "Toon Studio",
+      "avg_wait": 15.0,
+      "median_wait": 15.0,
+      "observations": 288,
+      "days_observed": 6
+    },
+    {
+      "ride": "Cars Quatre Roues Rallye",
+      "ride_id": 39,
+      "park": "adventure_world",
+      "land": "Toon Studio",
+      "avg_wait": 15.0,
+      "median_wait": 15.0,
+      "observations": 288,
+      "days_observed": 6
+    }
+  ],
+  "note": null
+}

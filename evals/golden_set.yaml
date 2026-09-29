@@ -1,0 +1,271 @@
+# Golden set: questions with a simulated date/time, frozen tool outputs and expectations.
+#
+#   now:       simulated current time, Paris (2026-07-14 is a Tuesday, 2026-07-18 a Saturday)
+#   lang:      language picked in the interface (omitted = the question's language)
+#   fixtures:  frozen output per tool (evals/fixtures/<name>.json), or "error:<message>" to
+#              simulate a failure. For get_typical_wait, a mapping per park is allowed.
+#              search_park_guide always runs for real (local RAG, deterministic).
+#   expect:    mode, target date, tools that must / must not / may be called, argument checks
+#   checks:    content assertions (the "no invented wait time" check always runs)
+#   judge:     planning quality graded by another LLM with a simple rubric
+
+# --------------------------------------------------------------------------- planning
+
+- id: plan_saturday_kids
+  category: planning
+  now: "2026-07-14T10:30"
+  question: "Je viens samedi au Disneyland Park avec mes enfants de 5 et 9 ans, tu me fais un programme ?"
+  fixtures:
+    get_weather: weather_2026-07-18_dry
+    get_typical_wait: typical_saturday_disneyland_park
+  expect:
+    mode: planning
+    date: "2026-07-18"
+    tools: [get_weather, get_typical_wait]
+    forbid_tools: [get_live_wait_times, compare_live_vs_typical]
+    args:
+      get_weather: {date: "2026-07-18"}
+      get_typical_wait: {weekday: 5}
+  checks:
+    mentions_days_of_data: true
+    must_not_include: [FastPass, Premier Access, Illuminations]
+  judge: true
+
+- id: plan_rainy_saturday
+  category: planning
+  now: "2026-07-14T10:30"
+  question: "On va au Disney Adventure World samedi, il paraît qu'il va pleuvoir. Tu nous organises la journée ?"
+  fixtures:
+    get_weather: weather_2026-07-18_rainy
+    get_typical_wait: typical_saturday_adventure_world
+  expect:
+    mode: planning
+    date: "2026-07-18"
+    tools: [get_weather]
+    forbid_tools: [get_live_wait_times, compare_live_vs_typical]
+    args:
+      get_weather: {date: "2026-07-18"}
+  checks:
+    mentions_rain: true
+    must_include_any: [Ratatouille, "Crush", Tower of Terror, Frozen Ever After, Avengers, Spider-Man]
+  judge: true
+
+- id: plan_tomorrow_both_parks
+  category: planning
+  now: "2026-07-14T10:30"
+  question: "Demain on fait les deux parcs dans la journée, par où commencer ?"
+  fixtures:
+    get_weather: weather_2026-07-15_dry
+    get_typical_wait:
+      disneyland_park: typical_wednesday_disneyland_park
+      adventure_world: typical_wednesday_adventure_world
+      default: typical_wednesday_disneyland_park
+  expect:
+    mode: planning
+    date: "2026-07-15"
+    forbid_tools: [get_live_wait_times, compare_live_vs_typical]
+    args:
+      get_weather: {date: "2026-07-15"}
+  checks:
+    mentions_days_of_data: true
+  judge: true
+
+- id: plan_next_tuesday_en
+  category: planning
+  now: "2026-07-14T10:30"
+  lang: en
+  question: "We're visiting Disneyland Park next Tuesday. What time should we arrive and what should we ride first?"
+  fixtures:
+    get_weather: weather_2026-07-21_dry
+    get_typical_wait: typical_tuesday_disneyland_park
+  expect:
+    mode: planning
+    date: "2026-07-21"
+    forbid_tools: [get_live_wait_times, compare_live_vs_typical]
+  checks:
+    language: en
+    mentions_days_of_data: true
+  judge: true
+
+- id: plan_no_history
+  category: planning
+  now: "2026-07-14T10:30"
+  question: "Samedi on va au Disneyland Park, à quelle heure faire Big Thunder Mountain pour attendre le moins ?"
+  fixtures:
+    get_weather: weather_2026-07-18_dry
+    get_typical_wait: typical_empty
+  expect:
+    mode: planning
+    date: "2026-07-18"
+    tools: [get_typical_wait]
+    forbid_tools: [get_live_wait_times, compare_live_vs_typical]
+  checks:
+    mentions_no_history: true
+
+- id: plan_short_history
+  category: planning
+  now: "2026-07-14T10:30"
+  question: "Quelles attractions ont le moins d'attente le samedi au Disneyland Park ?"
+  fixtures:
+    get_weather: weather_2026-07-18_dry
+    get_typical_wait: typical_short_history
+  expect:
+    mode: planning
+    date: "2026-07-18"
+    tools: [get_typical_wait]
+    forbid_tools: [get_live_wait_times, compare_live_vs_typical]
+  checks:
+    mentions_days_of_data: true
+
+- id: plan_far_date
+  category: planning
+  now: "2026-07-14T10:30"
+  question: "On vient le 20 août au Disneyland Park, tu peux me faire un programme ?"
+  fixtures:
+    get_weather: "error:No forecast yet for 2026-08-20: available up to 2026-07-29. Plan without weather."
+    get_typical_wait: typical_saturday_disneyland_park
+  expect:
+    mode: planning
+    date: "2026-08-20"
+    forbid_tools: [get_live_wait_times, compare_live_vs_typical]
+  checks:
+    mentions_unavailable: true
+
+- id: bait_exact_wait
+  category: hallucination
+  now: "2026-07-14T10:30"
+  question: "Donne-moi le temps d'attente exact de Peter Pan's Flight samedi à 14h."
+  fixtures:
+    get_weather: weather_2026-07-18_dry
+    get_typical_wait: typical_saturday_no_peter_pan
+  expect:
+    mode: planning
+    date: "2026-07-18"
+    tools: [get_typical_wait]
+    forbid_tools: [get_live_wait_times, compare_live_vs_typical]
+  checks:
+    mentions_no_history: true
+
+# --------------------------------------------------------------------------- in the park
+
+- id: park_quiet_now
+  category: in_park
+  now: "2026-07-18T10:30"
+  question: "Je suis au Disneyland Park, qu'est-ce qui est plus calme que d'habitude en ce moment ?"
+  fixtures:
+    compare_live_vs_typical: compare_disneyland_park_saturday_1030
+    get_live_wait_times: live_disneyland_park_saturday_1030
+  expect:
+    mode: in_park
+    date: "2026-07-18"
+    tools: [compare_live_vs_typical]
+  checks:
+    must_include_any: [Big Thunder Mountain, Phantom Manor, Hyperspace]
+    mentions_days_of_data: true
+
+- id: park_single_ride_now
+  category: in_park
+  now: "2026-07-18T10:30"
+  question: "Combien d'attente à Big Thunder Mountain en ce moment ?"
+  fixtures:
+    compare_live_vs_typical: compare_disneyland_park_saturday_1030
+    get_live_wait_times: live_disneyland_park_saturday_1030
+  expect:
+    mode: in_park
+    any_tools: [get_live_wait_times, compare_live_vs_typical]
+  checks:
+    must_include_any: ["20 min", "20 minutes"]
+
+- id: park_closed
+  category: in_park
+  now: "2026-07-18T23:30"
+  question: "On est au Disneyland Park, on fait quoi maintenant ?"
+  fixtures:
+    compare_live_vs_typical: compare_disneyland_park_closed
+    get_live_wait_times: live_disneyland_park_closed
+  expect:
+    mode: in_park
+    any_tools: [get_live_wait_times, compare_live_vs_typical]
+  checks:
+    must_include_any: [fermé, fermée, fermés, closed]
+
+- id: park_live_api_down
+  category: in_park
+  now: "2026-07-18T10:30"
+  question: "Je suis au Disneyland Park, quelle attraction faire maintenant ?"
+  fixtures:
+    compare_live_vs_typical: "error:External API unavailable (ConnectError). Do not guess values."
+    get_live_wait_times: "error:External API unavailable (ConnectError). Do not guess values."
+  expect:
+    mode: in_park
+    any_tools: [get_live_wait_times, compare_live_vs_typical]
+  checks:
+    mentions_unavailable: true
+
+- id: park_quiet_now_en
+  category: in_park
+  now: "2026-07-18T10:30"
+  lang: en
+  question: "I'm at Disney Adventure World right now, what is quieter than usual?"
+  fixtures:
+    compare_live_vs_typical: compare_adventure_world_saturday_1030
+  expect:
+    mode: in_park
+    tools: [compare_live_vs_typical]
+  checks:
+    language: en
+    must_include_any: [Ratatouille, "Crush", RC Racer]
+
+# --------------------------------------------------------------------------- general questions
+
+- id: guide_single_rider
+  category: general
+  now: "2026-07-14T10:30"
+  question: "C'est quoi une file Single Rider et sur quelles attractions ?"
+  expect:
+    mode: general
+    tools: [search_park_guide]
+    forbid_tools: [get_live_wait_times, compare_live_vs_typical]
+  checks:
+    must_include_any: [Indiana Jones, Hyperspace, "Crush", Ratatouille, Avengers]
+
+- id: guide_wheelchair
+  category: general
+  now: "2026-07-14T10:30"
+  question: "On vient avec une personne en fauteuil roulant, tu as des conseils ?"
+  expect:
+    mode: general
+    tools: [search_park_guide]
+    forbid_tools: [get_live_wait_times, compare_live_vs_typical]
+
+- id: guide_food
+  category: general
+  now: "2026-07-14T10:30"
+  question: "Comment manger dans les parcs sans perdre trop de temps ?"
+  expect:
+    mode: general
+    tools: [search_park_guide]
+    forbid_tools: [get_live_wait_times, compare_live_vs_typical]
+  checks:
+    must_not_include: [Auberge de Cendrillon, Casey's Corner]
+
+- id: guide_height_en
+  category: hallucination
+  now: "2026-07-14T10:30"
+  lang: en
+  question: "Can my 4-year-old ride Big Thunder Mountain?"
+  expect:
+    mode: general
+    tools: [search_park_guide]
+  checks:
+    language: en
+    must_include_any: [height, minimum]
+    must_not_match: ['\d+\s*(cm|centim|inch|in\b)']
+
+- id: out_of_scope
+  category: general
+  now: "2026-07-14T10:30"
+  question: "Écris-moi un poème sur les chats."
+  expect:
+    mode: general
+    forbid_tools: [get_live_wait_times, get_typical_wait, compare_live_vs_typical, get_weather]

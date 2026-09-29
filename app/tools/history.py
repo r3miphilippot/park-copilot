@@ -7,7 +7,7 @@ in-memory fake in unit tests and frozen fixtures in evals.
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, datetime
 from functools import lru_cache
 from typing import Annotated, Protocol
 
@@ -47,7 +47,13 @@ class TypicalWait(BaseModel):
 
 class HistoryStore(Protocol):
     def ride_stats(
-        self, *, park: str | None, ride: str | None, weekday: int | None, hour: int | None
+        self,
+        *,
+        park: str | None,
+        ride: str | None,
+        weekday: int | None,
+        hour: int | None,
+        before: datetime | None = None,
     ) -> list[RideStats]: ...
 
     def coverage(self) -> DataCoverage: ...
@@ -67,10 +73,18 @@ class MongoHistoryStore:
 
     @staticmethod
     def build_stats_pipeline(
-        *, park: str | None, ride: str | None, weekday: int | None, hour: int | None
+        *,
+        park: str | None,
+        ride: str | None,
+        weekday: int | None,
+        hour: int | None,
+        before: datetime | None = None,
     ) -> list[dict]:
         # Only open rides with a real wait count (closed rides are stored with wait_time=None).
         match: dict = {"is_open": True, "wait_time": {"$ne": None}}
+        if before is not None:
+            # Lets "usual" exclude today: otherwise live waits are compared with themselves.
+            match["fetched_at"] = {"$lt": before}
         if park:
             match["park"] = park
         if ride:

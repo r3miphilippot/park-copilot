@@ -1,0 +1,74 @@
+{
+  "park": "adventure_world",
+  "at": "2026-07-18T10:30:00+02:00",
+  "weekday": 5,
+  "hour": 10,
+  "coverage": {
+    "days": 42,
+    "first_day": "2026-05-20",
+    "last_day": "2026-07-17"
+  },
+  "rides": [
+    {
+      "ride": "Crush's Coaster",
+      "land": "Toon Studio",
+      "live_wait": 45,
+      "typical_avg": 70.0,
+      "typical_median": 70.0,
+      "delta_minutes": -25.0,
+      "days_observed": 6,
+      "verdict": "shorter_than_usual"
+    },
+    {
+      "ride": "Ratatouille : L’Aventure Totalement Toquée de Rémy",
+      "land": "Toon Studio",
+      "live_wait": 20,
+      "typical_avg": 45.0,
+      "typical_median": 45.0,
+      "delta_minutes": -25.0,
+      "days_observed": 6,
+      "verdict": "shorter_than_usual"
+    },
+    {
+      "ride": "RC Racer",
+      "land": "Toon Studio",
+      "live_wait": 15,
+      "typical_avg": 30.0,
+      "typical_median": 30.0,
+      "delta_minutes": -15.0,
+      "days_observed": 6,
+      "verdict": "shorter_than_usual"
+    },
+    {
+      "ride": "The Twilight Zone Tower of Terror",
+      "land": "Production Courtyard",
+      "live_wait": 40,
+      "typical_avg": 40.0,
+      "typical_median": 40.0,
+      "delta_minutes": 0.0,
+      "days_observed": 6,
+      "verdict": "usual"
+    },
+    {
+      "ride": "Avengers Assemble: Flight Force",
+      "land": "Marvel Avengers Campus",
+      "live_wait": 50,
+      "typical_avg": 35.0,
+      "typical_median": 35.0,
+      "delta_minutes": 15.0,
+      "days_observed": 6,
+      "verdict": "longer_than_usual"
+    },
+    {
+      "ride": "Frozen Ever After",
+      "land": "World of Frozen",
+      "live_wait": 85,
+      "typical_avg": 60.0,
+      "typical_median": 60.0,
+      "delta_minutes": 25.0,
+      "days_observed": 6,
+      "verdict": "longer_than_usual"
+    }
+  ],
+  "note": null
+}

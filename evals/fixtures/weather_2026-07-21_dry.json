@@ -1,0 +1,156 @@
+{
+  "date": "2026-07-21",
+  "location": "Marne-la-Vallée",
+  "min_temp_c": 19.0,
+  "max_temp_c": 27.0,
+  "total_precipitation_mm": 0.0,
+  "rainy_hours": [],
+  "rain_expected": false,
+  "hours": [
+    {
+      "time": "08:00",
+      "temperature_c": 20.0,
+      "feels_like_c": 19.0,
+      "precipitation_mm": 0.0,
+      "precipitation_probability": 5,
+      "wind_kmh": 12.0,
+      "conditions": "mainly clear"
+    },
+    {
+      "time": "09:00",
+      "temperature_c": 21.0,
+      "feels_like_c": 20.0,
+      "precipitation_mm": 0.0,
+      "precipitation_probability": 5,
+      "wind_kmh": 12.0,
+      "conditions": "mainly clear"
+    },
+    {
+      "time": "10:00",
+      "temperature_c": 22.0,
+      "feels_like_c": 21.0,
+      "precipitation_mm": 0.0,
+      "precipitation_probability": 5,
+      "wind_kmh": 12.0,
+      "conditions": "mainly clear"
+    },
+    {
+      "time": "11:00",
+      "temperature_c": 23.0,
+      "feels_like_c": 22.0,
+      "precipitation_mm": 0.0,
+      "precipitation_probability": 5,
+      "wind_kmh": 12.0,
+      "conditions": "mainly clear"
+    },
+    {
+      "time": "12:00",
+      "temperature_c": 24.0,
+      "feels_like_c": 23.0,
+      "precipitation_mm": 0.0,
+      "precipitation_probability": 5,
+      "wind_kmh": 12.0,
+      "conditions": "partly cloudy"
+    },
+    {
+      "time": "13:00",
+      "temperature_c": 25.0,
+      "feels_like_c": 24.0,
+      "precipitation_mm": 0.0,
+      "precipitation_probability": 5,
+      "wind_kmh": 12.0,
+      "conditions": "partly cloudy"
+    },
+    {
+      "time": "14:00",
+      "temperature_c": 26.0,
+      "feels_like_c": 25.0,
+      "precipitation_mm": 0.0,
+      "precipitation_probability": 5,
+      "wind_kmh": 12.0,
+      "conditions": "partly cloudy"
+    },
+    {
+      "time": "15:00",
+      "temperature_c": 27.0,
+      "feels_like_c": 26.0,
+      "precipitation_mm": 0.0,
+      "precipitation_probability": 5,
+      "wind_kmh": 12.0,
+      "conditions": "partly cloudy"
+    },
+    {
+      "time": "16:00",
+      "temperature_c": 26.0,
+      "feels_like_c": 25.0,
+      "precipitation_mm": 0.0,
+      "precipitation_probability": 5,
+      "wind_kmh": 12.0,
+      "conditions": "partly cloudy"
+    },
+    {
+      "time": "17:00",
+      "temperature_c": 25.0,
+      "feels_like_c": 24.0,
+      "precipitation_mm": 0.0,
+      "precipitation_probability": 5,
+      "wind_kmh": 12.0,
+      "conditions": "partly cloudy"
+    },
+    {
+      "time": "18:00",
+      "temperature_c": 24.0,
+      "feels_like_c": 23.0,
+      "precipitation_mm": 0.0,
+      "precipitation_probability": 5,
+      "wind_kmh": 12.0,
+      "conditions": "partly cloudy"
+    },
+    {
+      "time": "19:00",
+      "temperature_c": 23.0,
+      "feels_like_c": 22.0,
+      "precipitation_mm": 0.0,
+      "precipitation_probability": 5,
+      "wind_kmh": 12.0,
+      "conditions": "partly cloudy"
+    },
+    {
+      "time": "20:00",
+      "temperature_c": 22.0,
+      "feels_like_c": 21.0,
+      "precipitation_mm": 0.0,
+      "precipitation_probability": 5,
+      "wind_kmh": 12.0,
+      "conditions": "partly cloudy"
+    },
+    {
+      "time": "21:00",
+      "temperature_c": 21.0,
+      "feels_like_c": 20.0,
+      "precipitation_mm": 0.0,
+      "precipitation_probability": 5,
+      "wind_kmh": 12.0,
+      "conditions": "partly cloudy"
+    },
+    {
+      "time": "22:00",
+      "temperature_c": 20.0,
+      "feels_like_c": 19.0,
+      "precipitation_mm": 0.0,
+      "precipitation_probability": 5,
+      "wind_kmh": 12.0,
+      "conditions": "partly cloudy"
+    },
+    {
+      "time": "23:00",
+      "temperature_c": 19.0,
+      "feels_like_c": 18.0,
+      "precipitation_mm": 0.0,
+      "precipitation_probability": 5,
+      "wind_kmh": 12.0,
+      "conditions": "partly cloudy"
+    }
+  ],
+  "source": "Open-Meteo.com"
+}

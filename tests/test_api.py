@@ -61,7 +61,7 @@ async def _fake_history_days():
 async def test_chat_streams_events_in_order():
     graph = fake_graph(
         mode_decision("planning", "2099-01-03"),
-        tool_call("get_weather", {"day": "2099-01-03"}),
+        tool_call("get_weather", {"date": "2099-01-03"}),
         AIMessage("09:30 – Big Thunder Mountain"),
     )
     app = create_app(settings=settings(), graph=graph, warmup=False)

@@ -1,0 +1,149 @@
+{
+  "park": "disneyland_park",
+  "park_name": "Disneyland Park",
+  "fetched_at": "2026-07-18T10:30:00+02:00",
+  "park_open": true,
+  "rides": [
+    {
+      "ride": "Phantom Manor",
+      "ride_id": 12,
+      "land": "Frontierland",
+      "is_open": true,
+      "wait_time": 10
+    },
+    {
+      "ride": "\"it's a small world\"",
+      "ride_id": 14,
+      "land": "Fantasyland",
+      "is_open": true,
+      "wait_time": 15
+    },
+    {
+      "ride": "Pirates of the Caribbean",
+      "ride_id": 3,
+      "land": "Adventureland",
+      "is_open": true,
+      "wait_time": 15
+    },
+    {
+      "ride": "Big Thunder Mountain",
+      "ride_id": 11,
+      "land": "Frontierland",
+      "is_open": true,
+      "wait_time": 20
+    },
+    {
+      "ride": "Star Wars Hyperspace Mountain",
+      "ride_id": 7,
+      "land": "Discoveryland",
+      "is_open": true,
+      "wait_time": 25
+    },
+    {
+      "ride": "Buzz Lightyear Laser Blast",
+      "ride_id": 5,
+      "land": "Discoveryland",
+      "is_open": true,
+      "wait_time": 30
+    },
+    {
+      "ride": "Dumbo the Flying Elephant",
+      "ride_id": 21,
+      "land": "Fantasyland",
+      "is_open": true,
+      "wait_time": 40
+    },
+    {
+      "ride": "Peter Pan's Flight",
+      "ride_id": 26,
+      "land": "Fantasyland",
+      "is_open": true,
+      "wait_time": 75
+    },
+    {
+      "ride": "Autopia, presented by Avis",
+      "ride_id": 4,
+      "land": "Discoveryland",
+      "is_open": false,
+      "wait_time": null
+    },
+    {
+      "ride": "Blanche-Neige et les Sept Nains®",
+      "ride_id": 16,
+      "land": "Fantasyland",
+      "is_open": false,
+      "wait_time": null
+    },
+    {
+      "ride": "Casey Jr. – le Petit Train du Cirque",
+      "ride_id": 17,
+      "land": "Fantasyland",
+      "is_open": false,
+      "wait_time": null
+    },
+    {
+      "ride": "Indiana Jones™ and the Temple of Peril",
+      "ride_id": 2,
+      "land": "Adventureland",
+      "is_open": false,
+      "wait_time": null
+    },
+    {
+      "ride": "Le Carrousel de Lancelot",
+      "ride_id": 18,
+      "land": "Fantasyland",
+      "is_open": false,
+      "wait_time": null
+    },
+    {
+      "ride": "Le Pays des Contes de Fées, presented by Vittel",
+      "ride_id": 19,
+      "land": "Fantasyland",
+      "is_open": false,
+      "wait_time": null
+    },
+    {
+      "ride": "Les Mystères du Nautilus",
+      "ride_id": 6,
+      "land": "Discoveryland",
+      "is_open": false,
+      "wait_time": null
+    },
+    {
+      "ride": "Les Voyages de Pinocchio",
+      "ride_id": 24,
+      "land": "Fantasyland",
+      "is_open": false,
+      "wait_time": null
+    },
+    {
+      "ride": "Mad Hatter's Tea Cups",
+      "ride_id": 22,
+      "land": "Fantasyland",
+      "is_open": false,
+      "wait_time": null
+    },
+    {
+      "ride": "Mickey’s PhilharMagic",
+      "ride_id": 10,
+      "land": "Discoveryland",
+      "is_open": false,
+      "wait_time": null
+    },
+    {
+      "ride": "Orbitron®",
+      "ride_id": 8,
+      "land": "Discoveryland",
+      "is_open": false,
+      "wait_time": null
+    },
+    {
+      "ride": "Star Tours: The Adventures Continue*",
+      "ride_id": 9,
+      "land": "Discoveryland",
+      "is_open": false,
+      "wait_time": null
+    }
+  ],
+  "source": "Queue-Times.com (unofficial data)"
+}

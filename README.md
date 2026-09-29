@@ -26,7 +26,7 @@ from `app.tools`: they are defined once.
 | `get_live_wait_times(park)` | current wait of every ride (Queue-Times, cached 5 min) |
 | `get_typical_wait(ride?, weekday?, hour?, park?)` | average / median wait, observations and days of history |
 | `compare_live_vs_typical(park)` | live wait vs usual wait at this weekday and hour |
-| `get_weather(day)` | hourly forecast at the resort, rainy hours (Open-Meteo, cached 1 h) |
+| `get_weather(date)` | hourly forecast at the resort, rainy hours (Open-Meteo, cached 1 h) |
 | `search_park_guide(query, k?)` | relevant passages of the visit guide (RAG) |
 
 Every tool is read-only. Failures (API down, date out of range, invalid argument) come back as

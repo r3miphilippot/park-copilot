@@ -78,6 +78,8 @@ def fallback_reason(exc: BaseException) -> tuple[bool, float | None]:
     """Is this error worth switching provider for? Returns (fallback, retry_after_seconds)."""
     if isinstance(exc, groq.RateLimitError):
         return True, _retry_after(exc.response)
+    if is_invalid_tool_call(exc):
+        return True, None  # already retried once on the same model: try the other one
     if isinstance(exc, groq.APIStatusError) and exc.status_code == 413:
         return True, None  # request larger than the per-minute token quota
     if isinstance(exc, groq.APIStatusError | groq.APIConnectionError):
@@ -86,6 +88,13 @@ def fallback_reason(exc: BaseException) -> tuple[bool, float | None]:
     if isinstance(exc, httpx.TimeoutException | httpx.ConnectError | asyncio.TimeoutError):
         return True, None  # Ollama (httpx-based) down or too slow
     return False, None
+
+
+def is_invalid_tool_call(exc: BaseException) -> bool:
+    """Groq validates tool calls server-side: a model that produces arguments not matching the
+    schema gets a 400 "tool_use_failed". Model output is not deterministic, so a retry
+    usually succeeds."""
+    return isinstance(exc, groq.BadRequestError) and "tool_use_failed" in str(exc)
 
 
 def _retry_after(response: httpx.Response | None) -> float | None:
@@ -143,7 +152,13 @@ class LLMRouter:
 
     @staticmethod
     async def _call(provider, build, messages, config, fallback: bool) -> LLMResult:
-        value = await build(provider.model).ainvoke(messages, config)
+        try:
+            value = await build(provider.model).ainvoke(messages, config)
+        except Exception as exc:
+            if not is_invalid_tool_call(exc):
+                raise
+            log.warning("%s produced an invalid tool call, retrying once", provider.name)
+            value = await build(provider.model).ainvoke(messages, config)
         return LLMResult(value=value, provider=provider.name, fallback_used=fallback)
 
 

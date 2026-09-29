@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 from datetime import date, timedelta
 
 import httpx
@@ -56,15 +57,18 @@ class WeatherForecast(BaseModel):
 
 
 @tool_guard
-def get_weather(day: date) -> WeatherForecast | ToolError:
+def get_weather(date: dt.date) -> WeatherForecast | ToolError:
     """Get the hourly weather forecast at the resort for one day (today or up to 15 days
     ahead): temperature, rain probability and amount, wind, and the rainy hours.
 
     Use it to plan indoor rides during rainy hours.
 
     Args:
-        day: date in YYYY-MM-DD format.
+        date: the day, in YYYY-MM-DD format.
     """
+    # The parameter is named "date" because that is what LLMs spontaneously send: with
+    # "day", gpt-oss sometimes called get_weather(date=...) and Groq rejected the call.
+    day = date
     today = now_paris().date()
     if day < today:
         raise ToolFailure(f"{day} is in the past: forecasts only exist from today ({today}).")

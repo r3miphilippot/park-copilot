@@ -77,6 +77,24 @@ async def test_short_retry_after_is_waited_out(monkeypatch):
     assert (result.value.content, result.provider) == ("after wait", "primary")
 
 
+def invalid_tool_call() -> groq.BadRequestError:
+    body = {"error": {"code": "tool_use_failed", "message": "parameters did not match schema"}}
+    return groq.BadRequestError(
+        "Error code: 400 - " + str(body), response=httpx.Response(400, request=REQUEST), body=body
+    )
+
+
+async def test_invalid_tool_call_is_retried_on_the_same_model():
+    r = router([invalid_tool_call(), AIMessage("fixed")], [AIMessage("unused")])
+    result = await ask(r)
+    assert (result.value.content, result.provider) == ("fixed", "primary")
+
+
+async def test_repeated_invalid_tool_call_falls_back():
+    r = router([invalid_tool_call(), invalid_tool_call()], [AIMessage("backup")])
+    assert (await ask(r)).provider == "fallback"
+
+
 async def test_timeout_falls_back():
     r = router([groq.APITimeoutError(request=REQUEST)], [AIMessage("backup")])
     assert (await ask(r)).provider == "fallback"

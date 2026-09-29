@@ -1,0 +1,12 @@
+{
+  "filters": {
+    "weekday": "5 (Saturday)"
+  },
+  "coverage": {
+    "days": 0,
+    "first_day": null,
+    "last_day": null
+  },
+  "rides": [],
+  "note": "No history collected yet: rely on the park guide, do not invent wait times."
+}

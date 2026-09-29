@@ -53,13 +53,13 @@ def compare_live_vs_typical(park: str) -> Echo:
     return _echo("compare_live_vs_typical", park=park)
 
 
-def get_weather(day: str) -> Echo:
+def get_weather(date: str) -> Echo:
     """Weather.
 
     Args:
-        day: date.
+        date: the day.
     """
-    return _echo("get_weather", day=day)
+    return _echo("get_weather", date=date)
 
 
 def search_park_guide(query: str) -> Echo:
@@ -122,7 +122,7 @@ def test_calendar_gives_correct_weekdays():
 
 
 def test_history_keeps_current_turn_and_drops_old_tool_outputs():
-    old_call = tool_call("get_weather", {"day": "2026-07-15"})
+    old_call = tool_call("get_weather", {"date": "2026-07-15"})
     messages = [
         HumanMessage("q1"),
         old_call,
@@ -168,7 +168,7 @@ async def test_planning_mode_hides_live_tools():
     graph, model = make_graph(
         [
             mode_decision("planning", "2026-07-18"),
-            tool_call("get_weather", {"day": "2026-07-18"}),
+            tool_call("get_weather", {"date": "2026-07-18"}),
             AIMessage("09:30 – Big Thunder Mountain"),
         ]
     )
@@ -178,7 +178,7 @@ async def test_planning_mode_hides_live_tools():
     agent_tools = model.bound[1:]  # bound[0] is the structured output of detect_mode
     assert all(LIVE.isdisjoint(names) for names in agent_tools)
     tool_msg = next(m for m in state["messages"] if isinstance(m, ToolMessage))
-    assert '"day":"2026-07-18"' in tool_msg.content
+    assert '"date":"2026-07-18"' in tool_msg.content
     assert state["messages"][-1].content == "09:30 – Big Thunder Mountain"
 
     types = [e["type"] for e in events]

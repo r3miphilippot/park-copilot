@@ -32,7 +32,7 @@ async def test_stdio_server_end_to_end():
         schema = tools["get_live_wait_times"].input_schema["properties"]["park"]
         assert schema["enum"] == ["disneyland_park", "adventure_world"]
 
-        past = await session.call_tool("get_weather", {"day": "2020-01-01"})
+        past = await session.call_tool("get_weather", {"date": "2020-01-01"})
         assert past.is_error is True
         assert "in the past" in past.content[0].text  # the reason reaches the client
 
@@ -51,7 +51,7 @@ async def test_successful_call_returns_structured_content():
     assert "rainy_hours" in weather.output_schema["properties"]
 
     with frozen_now(datetime(2026, 7, 14, 10, 30, tzinfo=PARIS_TZ)):
-        result = await server.call_tool("get_weather", {"day": "2026-07-15"})
+        result = await server.call_tool("get_weather", {"date": "2026-07-15"})
     assert result.is_error is False
     assert result.structured_content["rainy_hours"] == ["14:00"]
     assert result.structured_content["source"] == "Open-Meteo.com"

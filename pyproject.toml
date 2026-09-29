@@ -27,6 +27,7 @@ dev = [
     "mongomock>=4.2",
     "pytest>=8.0",
     "pytest-asyncio>=1.4.0",
+    "pyyaml>=6.0.3",
     "respx>=0.21",
     "ruff>=0.6",
 ]

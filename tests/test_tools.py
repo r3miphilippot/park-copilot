@@ -130,6 +130,14 @@ def test_stats_pipeline_filters_and_escapes_ride_name():
     assert (match["park"], match["weekday"], match["hour"]) == ("disneyland_park", 5, 14)
 
 
+def test_stats_pipeline_can_exclude_recent_snapshots():
+    cutoff = datetime(2026, 7, 14, tzinfo=PARIS_TZ)
+    match = MongoHistoryStore.build_stats_pipeline(
+        park=None, ride=None, weekday=1, hour=10, before=cutoff
+    )[0]["$match"]
+    assert match["fetched_at"] == {"$lt": cutoff}
+
+
 def test_stats_pipeline_without_filters_keeps_only_open_rides():
     match = MongoHistoryStore.build_stats_pipeline(park=None, ride=None, weekday=None, hour=None)[
         0
@@ -164,6 +172,8 @@ def test_compare_live_vs_typical(use_store):
 
     # History is looked up for the simulated moment: Tuesday (1), 10h Paris.
     assert store.calls[0]["weekday"] == 1 and store.calls[0]["hour"] == 10
+    # "Usual" excludes today, otherwise the live waits would be compared with themselves.
+    assert store.calls[0]["before"] == datetime(2026, 7, 14, 0, 0, tzinfo=PARIS_TZ)
     assert (result.weekday, result.hour) == (1, 10)
     assert [(r.ride, r.verdict, r.delta_minutes) for r in result.rides] == [
         ("Pirates of the Caribbean", "shorter_than_usual", -25.0),

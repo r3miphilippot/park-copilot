@@ -1,0 +1,94 @@
+{
+  "park": "disneyland_park",
+  "at": "2026-07-18T10:30:00+02:00",
+  "weekday": 5,
+  "hour": 10,
+  "coverage": {
+    "days": 42,
+    "first_day": "2026-05-20",
+    "last_day": "2026-07-17"
+  },
+  "rides": [
+    {
+      "ride": "Big Thunder Mountain",
+      "land": "Frontierland",
+      "live_wait": 20,
+      "typical_avg": 45.0,
+      "typical_median": 45.0,
+      "delta_minutes": -25.0,
+      "days_observed": 6,
+      "verdict": "shorter_than_usual"
+    },
+    {
+      "ride": "Star Wars Hyperspace Mountain",
+      "land": "Discoveryland",
+      "live_wait": 25,
+      "typical_avg": 40.0,
+      "typical_median": 40.0,
+      "delta_minutes": -15.0,
+      "days_observed": 6,
+      "verdict": "shorter_than_usual"
+    },
+    {
+      "ride": "Phantom Manor",
+      "land": "Frontierland",
+      "live_wait": 10,
+      "typical_avg": 20.0,
+      "typical_median": 20.0,
+      "delta_minutes": -10.0,
+      "days_observed": 6,
+      "verdict": "shorter_than_usual"
+    },
+    {
+      "ride": "Pirates of the Caribbean",
+      "land": "Adventureland",
+      "live_wait": 15,
+      "typical_avg": 20.0,
+      "typical_median": 20.0,
+      "delta_minutes": -5.0,
+      "days_observed": 6,
+      "verdict": "usual"
+    },
+    {
+      "ride": "Buzz Lightyear Laser Blast",
+      "land": "Discoveryland",
+      "live_wait": 30,
+      "typical_avg": 30.0,
+      "typical_median": 30.0,
+      "delta_minutes": 0.0,
+      "days_observed": 6,
+      "verdict": "usual"
+    },
+    {
+      "ride": "\"it's a small world\"",
+      "land": "Fantasyland",
+      "live_wait": 15,
+      "typical_avg": 15.0,
+      "typical_median": 15.0,
+      "delta_minutes": 0.0,
+      "days_observed": 6,
+      "verdict": "usual"
+    },
+    {
+      "ride": "Dumbo the Flying Elephant",
+      "land": "Fantasyland",
+      "live_wait": 40,
+      "typical_avg": 30.0,
+      "typical_median": 30.0,
+      "delta_minutes": 10.0,
+      "days_observed": 6,
+      "verdict": "longer_than_usual"
+    },
+    {
+      "ride": "Peter Pan's Flight",
+      "land": "Fantasyland",
+      "live_wait": 75,
+      "typical_avg": 55.0,
+      "typical_median": 55.0,
+      "delta_minutes": 20.0,
+      "days_observed": 6,
+      "verdict": "longer_than_usual"
+    }
+  ],
+  "note": null
+}
