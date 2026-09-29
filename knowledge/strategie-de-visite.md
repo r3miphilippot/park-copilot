@@ -21,6 +21,21 @@ Chaque parc est découpé en zones (lands). Enchaîner les attractions d'une mê
 Au Disneyland Park, une boucle classique passe par Discoveryland, Fantasyland, Frontierland puis Adventureland, ou dans l'ordre inverse.
 Au Disney Adventure World, les zones sont plus compactes : Marvel Avengers Campus, Toon Studio, World of Frozen et Production Courtyard se parcourent facilement à pied.
 
+## Une journée complète type
+
+Une journée bien remplie permet de faire 10 à 15 attractions, en plus d'un spectacle. Une trame qui fonctionne dans la plupart des cas :
+
+- Avant l'ouverture : arrivée, contrôles de sécurité, placement près de l'entrée de la zone visée.
+- Première heure : les deux ou trois attractions les plus demandées de la liste, sans détour.
+- Fin de matinée : attractions de la même zone, en profitant des files encore raisonnables.
+- Déjeuner vers 11 h 30 ou après 14 h, pour éviter le pic des restaurants.
+- Début d'après-midi, au pic d'affluence : attractions à grande capacité, attractions intérieures, spectacles assis ou rencontres avec les personnages.
+- Pendant la parade de l'après-midi : les attractions populaires, dont les files baissent.
+- Fin d'après-midi et début de soirée : les zones pas encore visitées, dîner avant 19 h.
+- Soirée : dernières attractions éloignées de l'entrée, puis le spectacle nocturne devant le château, en se plaçant à l'avance.
+
+Les horaires d'ouverture, de parade et du spectacle nocturne changent selon la saison : ils sont à vérifier le jour même dans l'application officielle.
+
 ## Visiter les deux parcs le même jour
 
 Les deux parcs sont à quelques minutes à pied l'un de l'autre. Avec un billet valable dans les deux parcs, une stratégie courante consiste à :

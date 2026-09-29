@@ -71,6 +71,16 @@ def test_tool_expectations():
     assert [c.passed for c in checks] == [True, True, False, True]
 
 
+def test_full_day_plan_checks():
+    plan = "\n".join(
+        [f"- {h:02d}:30 – attraction {h}" for h in range(9, 21)] + ["21:30 – spectacle nocturne"]
+    )
+    short = "09:30 – Dumbo\n10:15 – Pirates\n**11:00** – temps calme\n18:00 – sortie du parc"
+    spec = {"min_timed_steps": 10, "mentions_evening_show": True}
+    assert [c.passed for c in check_content(transcript(plan), spec)] == [True, True]
+    assert [c.passed for c in check_content(transcript(short), spec)] == [False, False]
+
+
 def test_forbidden_mentions_and_patterns():
     spec = {"must_not_include": ["FastPass"], "must_not_match": [r"\d+\s*cm"]}
     checks = check_content(transcript("Prends un FastPass, taille minimale 102 cm"), spec)

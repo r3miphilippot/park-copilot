@@ -119,11 +119,18 @@ class Judgement(BaseModel):
     usefulness: int = Field(
         ge=1, le=5, description="Answers the visitor's actual constraints (kids, rain, date...)"
     )
+    completeness: int = Field(
+        ge=1,
+        le=5,
+        description="A real full day: from opening to the evening show, 10+ rides, no filler",
+    )
     comment: str = Field(default="", description="One sentence justifying the scores")
 
     @property
     def score(self) -> float:
-        return statistics.mean([self.timed_plan, self.coherence, self.grounding, self.usefulness])
+        return statistics.mean(
+            [self.timed_plan, self.coherence, self.grounding, self.usefulness, self.completeness]
+        )
 
 
 JUDGE_PROMPT = """You grade the answer of a theme-park planning assistant. Score each criterion
@@ -201,8 +208,17 @@ async def evaluate(cases: list[dict], *, use_judge: bool, pause_s: float) -> lis
                 break
             if transcript.answer not in UNAVAILABLE_MESSAGES.values():
                 break
-            print("  LLM quota hit, waiting 60 s before retrying", flush=True)
-            await asyncio.sleep(60)
+            print("  LLM quota hit, waiting 65 s before retrying", flush=True)
+            await asyncio.sleep(65)
+        if crash is None and transcript.answer in UNAVAILABLE_MESSAGES.values():
+            # The free quota, not the agent, failed: report it apart, out of the scores.
+            print("  SKIPPED: LLM quota still exhausted", flush=True)
+            results.append({"id": case["id"], "category": case.get("category", ""),
+                             "question": case["question"], "skipped": "llm_quota",
+                             "passed": None, "checks": [], "judge": None, "tools": [],
+                             "mode": None, "answer": ""})  # fmt: skip
+            await asyncio.sleep(pause_s)
+            continue
         checks = [
             Check("robustness", "no crash", crash is None, repr(crash)[:300] if crash else "")
         ]
@@ -248,14 +264,20 @@ def build_report(results: list[dict]) -> tuple[str, float]:
             by_category[c["category"]].append(c["passed"])
     all_checks = [p for values in by_category.values() for p in values]
     rate = sum(all_checks) / len(all_checks) if all_checks else 0.0
-    cases_ok = sum(r["passed"] for r in results)
+    scored = [r for r in results if not r.get("skipped")]
+    cases_ok = sum(bool(r["passed"]) for r in scored)
+    skipped = [r["id"] for r in results if r.get("skipped")]
 
     lines = [
         "# Park Copilot evals",
         "",
-        f"**{cases_ok}/{len(results)} cases fully passed · {rate:.0%} of checks passed** "
+        f"**{cases_ok}/{len(scored)} cases fully passed · {rate:.0%} of checks passed** "
         f"· model `{get_settings().llm_model}` · judge `{JUDGE_MODEL}`",
         "",
+    ]
+    if skipped:
+        lines += [f"Not scored (free LLM quota exhausted): {', '.join(skipped)}", ""]
+    lines += [
         "| Category | Pass rate | Checks |",
         "|---|---|---|",
     ]
@@ -274,7 +296,7 @@ def build_report(results: list[dict]) -> tuple[str, float]:
     for r in results:
         failed = "; ".join(f"{c['name']} ({c['detail']})" for c in r["checks"] if not c["passed"])
         tools = ", ".join(r["tools"]) or "-"
-        mark = "✅" if r["passed"] else "❌"
+        mark = "⏭️" if r.get("skipped") else ("✅" if r["passed"] else "❌")
         lines.append(f"| `{r['id']}` | {mark} | {r['mode']} | {tools} | {failed or '-'} |")
     return "\n".join(lines) + "\n", rate
 
@@ -283,7 +305,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the Park Copilot golden set")
     parser.add_argument("--cases", help="comma-separated case ids (default: all)")
     parser.add_argument("--no-judge", action="store_true", help="skip the LLM judge")
-    parser.add_argument("--pause", type=float, default=20.0, help="seconds between cases")
+    parser.add_argument("--pause", type=float, default=30.0, help="seconds between cases")
     parser.add_argument("--fail-under", type=float, help="exit 1 if the check pass rate is lower")
     parser.add_argument("--out", type=Path, default=EVALS_DIR / "reports")
     args = parser.parse_args(argv)

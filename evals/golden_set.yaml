@@ -28,7 +28,9 @@
       get_typical_wait: {weekday: 5}
   checks:
     mentions_days_of_data: true
-    must_not_include: [FastPass, Premier Access, Illuminations]
+    min_timed_steps: 10
+    mentions_evening_show: true
+    must_not_include: [FastPass, Premier Access, Illuminations, coin lecture]
   judge: true
 
 - id: plan_rainy_saturday

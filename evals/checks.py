@@ -43,6 +43,9 @@ WAIT_RE = re.compile(
     re.IGNORECASE,
 )
 DAYS_RE = re.compile(r"(\d+)\s*(?:jours?|days?)\b", re.IGNORECASE)
+# A timed step of a plan: a line starting with "09:30", "9h30", "- 14:00", "**10:15**"...
+TIMED_STEP_RE = re.compile(r"^\W*\d{1,2}\s*[:h]\s*\d{2}\b", re.MULTILINE)
+EVENING_SHOW_WORDS = ["spectacle", "show", "nocturne", "feux d'artifice", "fireworks"]
 NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
 
 NO_HISTORY_WORDS = [
@@ -52,7 +55,8 @@ NO_HISTORY_WORDS = [
 ]  # fmt: skip
 UNAVAILABLE_WORDS = [
     "indisponible", "pas disponible", "n'est pas disponible", "ne sont pas disponibles",
-    "pas encore de prévision", "pas de prévision", "impossible", "pas accessible",
+    "pas encore de prévision", "pas de prévision", "aucune prévision", "aucun prévision",
+    "impossible", "pas accessible",
     "unavailable", "not available", "no forecast", "can't access", "cannot access",
 ]  # fmt: skip
 RAIN_WORDS = ["pluie", "pleut", "pleuvoir", "averse", "rain", "shower"]
@@ -108,8 +112,16 @@ def detect_language(text: str) -> str:
     return "en" if en > fr else "fr"
 
 
+def normalize(text: str) -> str:
+    """LLMs write typographic characters: "20 minutes", "n’est". Compare plain text."""
+    for fancy in (" ", " ", " "):
+        text = text.replace(fancy, " ")
+    return text.replace("’", "'").replace("‘", "'").lower()
+
+
 def _contains_any(text: str, needles: list[str]) -> str | None:
-    lowered = text.lower()
+    lowered = normalize(text)
+    needles = [normalize(n) for n in needles]
     return next((n for n in needles if n.lower() in lowered), None)
 
 
@@ -185,6 +197,19 @@ def check_content(t: Transcript, checks_spec: dict) -> list[Check]:
         checks.append(
             Check("transparency", "says data is unavailable", bool(hit), f"matched {hit!r}")
         )
+    if minimum := checks_spec.get("min_timed_steps"):
+        steps = len(TIMED_STEP_RE.findall(answer))
+        checks.append(
+            Check(
+                "content",
+                f"plan has at least {minimum} timed steps",
+                steps >= minimum,
+                f"{steps} timed steps",
+            )  # fmt: skip
+        )
+    if checks_spec.get("mentions_evening_show"):
+        hit = _contains_any(answer, EVENING_SHOW_WORDS)
+        checks.append(Check("content", "plans the evening show", bool(hit), f"matched {hit!r}"))
     if checks_spec.get("mentions_rain"):
         hit = _contains_any(answer, RAIN_WORDS)
         checks.append(Check("content", "takes the rain into account", bool(hit), ""))
@@ -192,7 +217,7 @@ def check_content(t: Transcript, checks_spec: dict) -> list[Check]:
         hit = _contains_any(answer, needles)
         checks.append(Check("content", f"mentions one of {needles}", bool(hit), f"matched {hit!r}"))
     for banned in checks_spec.get("must_not_include", []):
-        ok = banned.lower() not in answer.lower()
+        ok = normalize(banned) not in normalize(answer)
         checks.append(Check("no_hallucination", f"does not mention {banned!r}", ok, ""))
     for pattern in checks_spec.get("must_not_match", []):
         match = re.search(pattern, answer, re.IGNORECASE)

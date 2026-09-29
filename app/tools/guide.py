@@ -32,7 +32,8 @@ def search_park_guide(
     The guide gives general advice only, never wait times. Quote it rather than inventing.
 
     Args:
-        query: what you are looking for, in French or English (e.g. "attractions intérieures").
+        query: what you are looking for, IN FRENCH (the guide is written in French), e.g.
+            "attractions intérieures" or "taille minimale enfants".
         k: number of passages to return (1-8).
     """
     hits = rag_index.get_guide_index().search(query, k)
