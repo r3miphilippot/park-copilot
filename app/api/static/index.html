@@ -499,11 +499,13 @@ function inline(s, links = true) {  // s is already escaped
 // "- **09:30 – ...**" and "**09:30** – ..." as LLMs write them.
 const TIME_LINE = /^(?:[-*•]\s*)?(?:\*\*)?(\d{1,2})\s*[:h]\s*(\d{2})(?:\*\*)?\s*[–—-]\s*(.+)$/;
 const TABLE_SEPARATOR = /^\|?\s*:?-{3,}/;
+const CODE_FENCE = /^(```|~~~)/;  // some models wrap the whole plan in a code block
 
-// Markdown lines, trimmed, without table separators, a fully bold line unwrapped.
+// Markdown lines, trimmed, without table separators nor code fences, a fully bold line unwrapped.
 function mdLines(src) {
   return src.replace(/\r/g, "").split("\n").map(raw => raw.trim())
-    .map(line => TABLE_SEPARATOR.test(line) ? null : line.replace(/^\*\*(.+)\*\*$/, "$1"));
+    .map(line => TABLE_SEPARATOR.test(line) || CODE_FENCE.test(line)
+      ? null : line.replace(/^\*\*(.+)\*\*$/, "$1"));
 }
 
 // A plan step: { time: "09:30", what: "Big Thunder Mountain", detail: "≈ 15 min" }, or null.

@@ -5,6 +5,7 @@ import pytest
 
 from app.clock import frozen_now
 from app.config import PARIS_TZ
+from app.i18n import answer_language
 from app.tools import ToolError, get_typical_wait, list_rides, plan_day
 from app.tools.history import HourlyProfile
 from app.tools.live import LiveWaitTimes, RideLiveWait
@@ -320,3 +321,16 @@ def test_far_date_without_history_from_that_season_says_so(plan):
     far = date(2026, 12, 19)  # five months after "now", history from the summer only
     result = plan(store_profile=profile(), date=far)
     assert any("No history yet from this time of year" in n for n in result.notes)
+
+
+def test_steps_are_written_in_the_answer_language(plan):
+    with answer_language("fr"):
+        result = plan(store_profile=profile(), hours=official(), preference="thrill")
+    titles = [s.title for s in result.steps if s.kind != "ride"]
+    assert titles == [
+        "Arrivée et contrôles de sécurité",
+        "Déjeuner",
+        "Spectacle nocturne au château",
+    ]
+    assert result.steps[0].note == "Ouverture du parc à 09:30."
+    assert any(s.note == "deuxième tour" for s in rides_of(result))

@@ -16,6 +16,7 @@ from app.agent.graph import (
 from app.agent.prompts import build_system_prompt, calendar
 from app.clock import frozen_now
 from app.config import PARIS_TZ
+from app.i18n import current_lang
 from app.llm import LLMRouter, Provider
 from tests.fakes import ScriptedChatModel, mode_decision, tool_call
 
@@ -258,3 +259,24 @@ async def test_memory_is_kept_per_thread():
         "Question 1", "Réponse 1", "Et demain ?", "Réponse 2",
     ]  # fmt: skip
     assert len(state_b["messages"]) == 2
+
+
+def which_language() -> Echo:
+    """Language of the texts the tools write for the visitor."""
+    return _echo("which_language", lang=current_lang())
+
+
+@pytest.mark.parametrize(("lang", "expected"), [(None, "fr"), ("fr", "fr"), ("en", "en")])
+async def test_tools_write_in_the_answer_language(lang, expected):
+    model = ScriptedChatModel(
+        responses=[mode_decision("general"), tool_call("which_language", {}), AIMessage("ok")]
+    )
+    graph = build_graph(
+        LLMRouter(Provider("fake", model), None), tools=[*FAKE_TOOLS, which_language]
+    )
+    config = {"configurable": {"thread_id": f"lang-{lang}"}}
+    with frozen_now(TUESDAY_1030):
+        state = await graph.ainvoke({"messages": [HumanMessage("?")], "lang": lang}, config)
+    tool_msg = next(m for m in state["messages"] if isinstance(m, ToolMessage))
+    assert f'"lang":"{expected}"' in tool_msg.content
+    assert current_lang() == "en"  # back to the default once the tools ran

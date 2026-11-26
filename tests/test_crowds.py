@@ -10,6 +10,7 @@ from app import holidays
 from app.clock import frozen_now
 from app.config import PARIS_TZ
 from app.holidays import PUBLIC_URL, SCHOOL_URL, DayOff, parse_school_holidays
+from app.i18n import answer_language
 from app.tools import ToolError, get_crowd_calendar
 from app.tools.crowds import build_model
 from tests.conftest import FakeHistoryStore
@@ -145,3 +146,15 @@ def test_days_off_merges_school_and_public_holidays():
     assert christmas.public_holiday == "Jour de Noël" and christmas.school_zones == ["Zone C"]
     assert 'zones in ("Zone A","Zone B","Zone C")' in school.calls[0].request.url.params["where"]
     assert PUBLIC_URL.startswith("https://calendrier.api.gouv.fr")
+
+
+def test_levels_and_reasons_in_the_answer_language(crowds):
+    with answer_language("fr"):
+        result = crowds(start=date(2026, 12, 25), end=date(2026, 12, 26))
+    christmas, saturday = result.days
+    assert saturday.level == "very_busy" and saturday.label == "très chargée"
+    assert christmas.weekday == "vendredi" and christmas.reasons == [
+        "vendredi",
+        "vacances scolaires (Vacances de Noël), zones A, B, C",
+        "jour férié (Jour de Noël)",
+    ]

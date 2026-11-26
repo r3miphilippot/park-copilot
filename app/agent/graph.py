@@ -44,6 +44,7 @@ from app.agent.prompts import (
     format_day,
 )
 from app.clock import now_paris
+from app.i18n import answer_language
 from app.llm import LLMRouter, LLMUnavailable
 from app.tools import TOOLS, ToolError
 
@@ -213,7 +214,11 @@ def build_graph(
             )
 
         last = state["messages"][-1]
-        return {"messages": await asyncio.gather(*(run_one(c) for c in last.tool_calls))}
+        # Texts the tools write for the visitor (plan steps, crowd levels) come in the answer
+        # language: French unless the interface asked for English.
+        with answer_language(state.get("lang") or "fr"):
+            messages = await asyncio.gather(*(run_one(c) for c in last.tool_calls))
+        return {"messages": messages}
 
     def route_after_agent(state: AgentState) -> str:
         last = state["messages"][-1]

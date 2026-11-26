@@ -33,8 +33,9 @@ from app.clock import now_paris
 from app.config import PARKS, ParkKey
 from app.db import DatabaseNotConfigured
 from app.holidays import DayOff
+from app.i18n import text, weekday_name
 from app.tools.common import ToolError, ToolFailure, tool_guard
-from app.tools.history import WEEKDAYS, day_weight, get_history_store, weighted_mean
+from app.tools.history import day_weight, get_history_store, weighted_mean
 from app.tools.park_hours import hours_on, published_schedule
 from app.tools.rides import CATALOG
 
@@ -51,6 +52,7 @@ class CrowdDay(BaseModel):
     date: dt.date
     weekday: str
     level: Level | None  # None: not enough history to rank this day
+    label: str | None = None  # the level in the visitor's language, to copy as it is
     expected_wait: float | None  # expected average wait of the popular rides, 11:00-18:00
     reasons: list[str]  # what drives the crowd: weekday, school or public holidays
     hours: str | None = None  # official opening hours, when already published
@@ -127,12 +129,12 @@ def build_model(history: dict[dt.date, float], off: dict[dt.date, DayOff]) -> Cr
 
 
 def _reasons(day: dt.date, off: DayOff | None) -> list[str]:
-    reasons = [WEEKDAYS[day.weekday()]]
+    reasons = [weekday_name(day.weekday())]
     if off and off.school_zones:
         zones = ", ".join(z.removeprefix("Zone ") for z in off.school_zones)
-        reasons.append(f"French school holidays ({off.school_holiday}), zones {zones}")
+        reasons.append(text("school_holidays", name=off.school_holiday or "", zones=zones))
     if off and off.public_holiday:
-        reasons.append(f"French public holiday ({off.public_holiday})")
+        reasons.append(text("public_holiday", name=off.public_holiday))
     return reasons
 
 
@@ -195,10 +197,11 @@ def get_crowd_calendar(
     while day <= end:
         hours = hours_on(park, day, schedule) if schedule else None
         expected = model.expected(day) if model else None
+        level = model.level(expected) if model else None
         days.append(
             CrowdDay(
-                date=day, weekday=WEEKDAYS[day.weekday()],
-                level=model.level(expected) if model else None,
+                date=day, weekday=weekday_name(day.weekday()),
+                level=level, label=text(level) if level else None,
                 expected_wait=round(expected, 1) if expected is not None else None,
                 reasons=_reasons(day, off.get(day)),
                 hours=f"{hours.opening}-{hours.closing}" if hours and hours.is_open else None,

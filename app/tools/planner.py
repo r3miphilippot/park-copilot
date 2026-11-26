@@ -37,6 +37,7 @@ from pydantic import BaseModel, Field
 
 from app.clock import now_paris
 from app.config import PARKS, ParkKey
+from app.i18n import text
 from app.tools.common import ToolError, ToolFailure, tool_guard
 from app.tools.history import HourlyProfile, get_history_store
 from app.tools.live import get_live_wait_times
@@ -327,13 +328,13 @@ def plan_day(
     already_there = date == today and now.hour * 60 + now.minute > _minutes(start)
     if _minutes(start) < begin and not already_there:
         if official is None:
-            arrival = f"Rides usually start around {_hhmm(begin)}."
+            arrival = text("rides_start", time=_hhmm(begin))
         elif early is not None and begin == early:
-            arrival = f"Extra Magic Hours from {_hhmm(early)}, park opens at {official.opening}."
+            arrival = text("emh_from", start=_hhmm(early), opening=official.opening)
         else:
-            arrival = f"Park opens at {official.opening}."
+            arrival = text("opens_at", time=official.opening)
         steps.append(PlanStep(time=_hhmm(_minutes(start)), kind="info",
-                              title="Arrival and security checks", note=arrival))  # fmt: skip
+                              title=text("arrival"), note=arrival))  # fmt: skip
     waits, today_vs_usual = Waits(profile), None
     live = _live_waits(park) if date == today else None
     if live:
@@ -449,14 +450,14 @@ def _shows(
     events: list[Event] = []
     night = next((s for s in shows if s.kind == "night_show"), None)
     if night is not None:
-        step = PlanStep(time=night.times[-1], kind="show", title=f"Night show: {night.name}",
-                        note="Official time today; find a spot about 20 min before.")  # fmt: skip
+        step = PlanStep(time=night.times[-1], kind="show",
+                        title=text("night_show_named", name=night.name),
+                        note=text("night_show_note"))  # fmt: skip
         events.append(Event(_minutes(night.times[-1]), *NIGHT_SHOW, step))
     elif park == "disneyland_park" and (official is None or official.shows is None):
         at = closing - NIGHT_SHOW_BEFORE_CLOSING
-        note = (f"Usually shortly before closing ({_hhmm(closing)}): exact time published on "
-                "the day in the official app; find a spot early.")  # fmt: skip
-        step = PlanStep(time=_hhmm(at), kind="show", title="Night show at the castle", note=note)
+        note = text("night_show_estimated", closing=_hhmm(closing))
+        step = PlanStep(time=_hhmm(at), kind="show", title=text("night_show"), note=note)
         events.append(Event(at, *NIGHT_SHOW, step))
 
     if preference != "thrill":
@@ -468,9 +469,9 @@ def _shows(
                        if max(begin, opening + 60) <= _minutes(t) - PARADE[0]
                        and _minutes(t) + PARADE[1] <= finish]  # fmt: skip
             if fitting:
-                step = PlanStep(time=fitting[-1], kind="show", title=f"Parade: {parade.name}",
-                                note="Official time today; find a spot about 15 min before. "
-                                "Queues elsewhere drop during the parade.")  # fmt: skip
+                step = PlanStep(time=fitting[-1], kind="show",
+                                title=text("parade", name=parade.name),
+                                note=text("parade_note"))  # fmt: skip
                 events.append(Event(_minutes(fitting[-1]), *PARADE, step))
     # Only the shows inside the visit.
     return sorted((e for e in events if begin <= e.block_start and e.at <= finish),
@@ -505,14 +506,14 @@ def _schedule(candidates, waits, begin, finish, preference, single_rider, rainy,
 
         # Meals only inside their off-peak windows (a plan starting at 14:00 has no lunch).
         if not had_lunch and LUNCH_AFTER <= now < 14 * 60 and now + MEAL_MINUTES <= limit:
-            steps.append(PlanStep(time=_hhmm(now), kind="meal", title="Lunch",
-                                  note="Quick-service, before the 12:00-14:00 peak."))  # fmt: skip
+            steps.append(PlanStep(time=_hhmm(now), kind="meal", title=text("lunch"),
+                                  note=text("lunch_note")))  # fmt: skip
             now, had_lunch = now + MEAL_MINUTES, True
             continue
         if (not had_dinner and DINNER_AFTER <= now < 20 * 60 and finish >= 20 * 60 + 30
                 and now + MEAL_MINUTES <= limit):  # fmt: skip
-            steps.append(PlanStep(time=_hhmm(now), kind="meal", title="Dinner",
-                                  note="Early dinner, to avoid the evening peak."))  # fmt: skip
+            steps.append(PlanStep(time=_hhmm(now), kind="meal", title=text("dinner"),
+                                  note=text("dinner_note")))  # fmt: skip
             now, had_dinner = now + MEAL_MINUTES, True
             continue
 
@@ -562,7 +563,7 @@ def _schedule(candidates, waits, begin, finish, preference, single_rider, rainy,
                 time=_hhmm(now + walk), kind="ride", title=best.name, land=best.land, line=line,
                 expected_wait=round(real) if real is not None else None, thrill=best.thrill,
                 indoor=best.indoor, live_wait=live or None,
-                note="second ride" if done.get(best.ride_id) else None,
+                note=text("second_ride") if done.get(best.ride_id) else None,
             )
         )  # fmt: skip
         done[best.ride_id] = done.get(best.ride_id, 0) + 1
