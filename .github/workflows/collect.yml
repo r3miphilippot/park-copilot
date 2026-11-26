@@ -16,6 +16,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: write  # only for the "keep this workflow enabled" step below
 
 jobs:
   collect:
@@ -45,3 +46,16 @@ jobs:
         if: ${{ always() && env.API_URL != '' }}
         continue-on-error: true
         run: curl --fail --silent --show-error --max-time 90 "${API_URL%/}/health"
+
+      # GitHub disables scheduled workflows after 60 days without a commit (public repos), and
+      # a disabled workflow also refuses the cron-job.org dispatches. Re-enabling it through the
+      # API resets that counter: done once a day (03:xx UTC), never fails the collection.
+      - name: Keep this workflow enabled
+        if: ${{ always() }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$(date -u +%H)" != "03" ]; then echo "Not 03:xx UTC, skipped."; exit 0; fi
+          gh api --method PUT "repos/${{ github.repository }}/actions/workflows/collect.yml/enable"
+          echo "Workflow re-enabled: inactivity counter reset."

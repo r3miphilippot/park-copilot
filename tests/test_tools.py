@@ -9,13 +9,14 @@ import respx
 from pymongo.errors import ServerSelectionTimeoutError
 
 from app.clock import frozen_now
-from app.config import PARIS_TZ, PARKS, QUEUE_TIMES_BASE_URL
+from app.config import PARIS_TZ, PARKS, QUEUE_TIMES_BASE_URL, THEMEPARKS_BASE_URL
 from app.db import DatabaseNotConfigured
 from app.tools import (
     TOOLS,
     ToolError,
     compare_live_vs_typical,
     get_live_wait_times,
+    get_park_hours,
     get_typical_wait,
     get_weather,
 )
@@ -244,3 +245,142 @@ def test_weather_api_error_is_reported():
     with frozen_now(TUESDAY_1030):
         result = get_weather("2026-07-15")
     assert isinstance(result, ToolError) and "unavailable" in result.error
+
+
+# --------------------------------------------------------------------------- opening hours
+
+DLP_ID = PARKS["disneyland_park"].themeparks_id
+SCHEDULE_URL = f"{THEMEPARKS_BASE_URL}/entity/{DLP_ID}/schedule"
+SHOWS_URL = f"{THEMEPARKS_BASE_URL}/entity/{DLP_ID}/live"
+
+
+def _slot(day: str, kind: str, opening: str, closing: str, **extra) -> dict:
+    return {"date": day, "type": kind, "openingTime": f"{day}T{opening}:00+02:00",
+            "closingTime": f"{day}T{closing}:00+02:00", **extra}  # fmt: skip
+
+
+SCHEDULE = {
+    "schedule": [
+        _slot("2026-07-14", "EXTRA_HOURS", "08:30", "09:30", description="Extra Magic Hours"),
+        _slot("2026-07-14", "OPERATING", "09:30", "23:00"),
+        _slot("2026-07-15", "OPERATING", "09:30", "23:00"),
+        _slot("2026-07-15", "TICKETED_EVENT", "20:00", "23:30", description="Summer Party"),
+    ]
+}
+
+
+def _show(name: str, *times: str, kind="SHOW", status="OPERATING") -> dict:
+    return {"name": name, "entityType": kind, "status": status,
+            "showtimes": [{"type": "Performance Time", "startTime": f"2026-07-14T{t}:00+02:00"}
+                          for t in times]}  # fmt: skip
+
+
+SHOWS = {
+    "liveData": [
+        _show("Disney Tales of Magic", "22:35"),
+        _show("Reserved viewing area: Disney Tales of Magic", "22:35"),  # paid: left out
+        _show("Disney Stars on Parade", "10:00", "17:30"),  # 10:00 is already past
+        _show("Meet Mickey Mouse", "11:00", "11:30"),
+        _show("The Lion King: Rhythms of the Pride Lands", "12:10", "21:40"),
+        _show("Mickey's PhilharMagic", "11:00", kind="ATTRACTION"),  # a ride, not a show
+        _show("Frozen Sing-Along", "15:00", status="CLOSED"),
+    ]
+}
+
+
+CHILDREN_URL = f"{THEMEPARKS_BASE_URL}/entity/{DLP_ID}/children"
+RIDE_SCHEDULES = {  # ThemeParks.wiki names differ slightly from the catalogue's
+    "Phantom Manor": ["2026-07-16", "2026-07-17"],  # refurbishment until July 15
+    "Big Thunder Mountain": ["2026-07-14", "2026-07-15"],
+    "Autopia, presented by Avis": ["2026-07-14", "2026-07-15"],
+    "Mickey’s PhilharMagic": ["2026-07-14", "2026-07-15"],
+}
+
+
+def _mock_ride_schedules(schedules: dict[str, list[str]] = RIDE_SCHEDULES):
+    children = [{"id": f"id-{i}", "name": name, "entityType": "ATTRACTION"}
+                for i, name in enumerate(schedules)]  # fmt: skip
+    children.append({"id": "resto", "name": "Café Mickey", "entityType": "RESTAURANT"})
+    respx.get(CHILDREN_URL).mock(return_value=httpx.Response(200, json={"children": children}))
+    for i, days in enumerate(schedules.values()):
+        schedule = [{"date": d, "type": "OPERATING"} for d in days]
+        respx.get(f"{THEMEPARKS_BASE_URL}/entity/id-{i}/schedule").mock(
+            return_value=httpx.Response(200, json={"schedule": schedule})
+        )
+
+
+@respx.mock
+def test_park_hours_list_rides_closed_that_day():
+    respx.get(SCHEDULE_URL).mock(return_value=httpx.Response(200, json=SCHEDULE))
+    _mock_ride_schedules()
+    with frozen_now(TUESDAY_1030):
+        result = get_park_hours("disneyland_park", "2026-07-15")
+    assert [(c.ride, str(c.reopens)) for c in result.closed_rides] == [
+        ("Phantom Manor", "2026-07-16")
+    ]
+
+
+@respx.mock
+def test_park_hours_ignore_ride_schedules_closing_most_rides():
+    # Most rides "closed": schedules not published yet, not a mass refurbishment.
+    respx.get(SCHEDULE_URL).mock(return_value=httpx.Response(200, json=SCHEDULE))
+    _mock_ride_schedules({name: [] for name in RIDE_SCHEDULES})
+    with frozen_now(TUESDAY_1030):
+        result = get_park_hours("disneyland_park", "2026-07-15")
+    assert result.closed_rides == []
+
+
+@respx.mock
+def test_park_hours_today_with_shows():
+    respx.get(SCHEDULE_URL).mock(return_value=httpx.Response(200, json=SCHEDULE))
+    respx.get(SHOWS_URL).mock(return_value=httpx.Response(200, json=SHOWS))
+    _mock_ride_schedules()
+    with frozen_now(TUESDAY_1030):
+        result = get_park_hours("disneyland_park", "2026-07-14")
+
+    assert (result.opening, result.closing) == ("09:30", "23:00")
+    assert result.extra_magic_hours == "08:30-09:30"
+    assert [(s.name, s.kind, s.times) for s in result.shows] == [
+        ("Disney Tales of Magic", "night_show", ["22:35"]),
+        ("Disney Stars on Parade", "parade", ["17:30"]),
+        ("The Lion King: Rhythms of the Pride Lands", "show", ["12:10", "21:40"]),
+        ("Meet Mickey Mouse", "character", ["11:00", "11:30"]),
+    ]
+
+
+@respx.mock
+def test_park_hours_future_date_has_no_show_times():
+    schedule = respx.get(SCHEDULE_URL).mock(return_value=httpx.Response(200, json=SCHEDULE))
+    shows = respx.get(SHOWS_URL)
+    _mock_ride_schedules()
+    with frozen_now(TUESDAY_1030):
+        result = get_park_hours("disneyland_park", "2026-07-15")
+        get_park_hours("disneyland_park", "2026-07-14")  # schedule cached, shows fetched
+
+    assert schedule.call_count == 1 and shows.call_count == 1
+    assert result.extra_magic_hours is None and result.shows is None
+    assert result.special_events == ["Summer Party 20:00-23:30"]
+    assert "published on the day" in result.note
+
+
+@respx.mock
+@pytest.mark.parametrize(
+    ("day", "expected"),
+    [("2026-07-13", "in the past"), ("2026-09-01", "not published yet")],
+)
+def test_park_hours_outside_the_published_schedule(day, expected):
+    respx.get(SCHEDULE_URL).mock(return_value=httpx.Response(200, json=SCHEDULE))
+    with frozen_now(TUESDAY_1030):
+        result = get_park_hours("disneyland_park", day)
+    assert isinstance(result, ToolError) and expected in result.error
+
+
+@respx.mock
+def test_park_hours_survive_a_show_times_outage():
+    respx.get(SCHEDULE_URL).mock(return_value=httpx.Response(200, json=SCHEDULE))
+    respx.get(SHOWS_URL).mock(return_value=httpx.Response(503))
+    _mock_ride_schedules()
+    with frozen_now(TUESDAY_1030):
+        result = get_park_hours("disneyland_park", "2026-07-14")
+    assert result.closing == "23:00" and result.shows is None
+    assert "unavailable" in result.note

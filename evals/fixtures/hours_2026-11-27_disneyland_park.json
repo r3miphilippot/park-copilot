@@ -1,0 +1,12 @@
+{
+  "park": "disneyland_park",
+  "park_name": "Disneyland Park",
+  "date": "2026-11-27",
+  "is_open": true,
+  "opening": "09:30",
+  "closing": "19:00",
+  "extra_magic_hours": "08:30-09:30",
+  "special_events": [],
+  "note": "Show and parade times are only published on the day (official app).",
+  "source": "ThemeParks.wiki (official Disneyland Paris schedule)"
+}

@@ -111,6 +111,7 @@
   fixtures:
     get_weather: weather_2026-07-21_dry
     get_typical_wait: typical_tuesday_disneyland_park
+    hourly_profile: {disneyland_park: profile_disneyland_park}
   expect:
     mode: planning
     date: "2026-07-21"
@@ -119,6 +120,49 @@
     language: en
     mentions_days_of_data: true
   judge: true
+
+# Winter: the park closes at 19:00 while the (summer) history has waits until 23:00. The plan
+# must follow the official hours, not the history.
+- id: plan_winter_official_hours
+  category: planning
+  now: "2026-11-26T10:00"
+  question: "On vient demain au Disneyland Park, on dort au Disneyland Hotel. Tu nous fais un programme ?"
+  fixtures:
+    get_park_hours: {disneyland_park: hours_2026-11-27_disneyland_park}
+    get_weather: "error:Forecast service unavailable."
+    hourly_profile: {disneyland_park: profile_disneyland_park}
+  expect:
+    mode: planning
+    date: "2026-11-27"
+    tools: [plan_day]
+    forbid_tools: [get_live_wait_times, compare_live_vs_typical]
+    args:
+      plan_day: {park: disneyland_park, date: "2026-11-27", extra_magic_hours: true}
+  checks:
+    min_timed_steps: 8
+    max_step_time: "19:00"
+    must_include_any: ["19:00", "19h", "19 h"]
+    mentions_evening_show: true
+    known_rides_only: true
+  judge: true
+
+# "Which day?": one crowd calendar call over the whole period, quietest days and reasons.
+- id: crowd_which_day_december
+  category: planning
+  now: "2026-11-26T10:00"
+  question: "On hésite entre plusieurs jours du 14 au 27 décembre pour aller au Disneyland Park. Quel jour venir pour éviter la foule ?"
+  fixtures:
+    get_crowd_calendar: {disneyland_park: crowd_december_disneyland_park}
+  expect:
+    mode: planning
+    tools: [get_crowd_calendar]
+    forbid_tools: [get_live_wait_times, compare_live_vs_typical]
+    args:
+      get_crowd_calendar: {park: disneyland_park}
+  checks:
+    mentions_days_of_data: true
+    must_include_any: ["lundi 14", "mardi 15", "mercredi 16", "14 décembre", "15 décembre", "16 décembre", "14/12", "15/12", "16/12"]
+    must_not_include: [FastPass, Premier Access]
 
 - id: plan_no_history
   category: planning
@@ -157,6 +201,7 @@
   fixtures:
     get_weather: "error:No forecast yet for 2026-08-20: available up to 2026-07-29. Plan without weather."
     get_typical_wait: typical_saturday_disneyland_park
+    hourly_profile: {disneyland_park: profile_disneyland_park}
   expect:
     mode: planning
     date: "2026-08-20"

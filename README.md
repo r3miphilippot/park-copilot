@@ -22,8 +22,8 @@ date in Paris:
 
 | Mode | When | Data used |
 |---|---|---|
-| **Planning** | a future date ("we're coming on Saturday") | usual waits for that weekday, weather forecast, guide. **Never live waits.** |
-| **In the park** | today, now ("what's quiet right now?") | live waits compared with the usual wait at this weekday and hour |
+| **Planning** | a future date ("we're coming on Saturday") | usual waits for that weekday (weighted toward the same season), official hours and closures, weather forecast, crowd calendar, guide. **Never live waits.** |
+| **In the park** | today, now ("what's quiet right now?") | live waits compared with the usual wait at this weekday and hour; a plan for the rest of the day starts from the live waits |
 
 > *"J'aimerais venir demain à partir de 8h30 : le moins d'attente et le plus d'attractions à
 > sensations ?"*
@@ -31,6 +31,13 @@ date in Paris:
 > of every ride at every hour, walking times and the weather → a timed plan from arrival to the
 > night show: thrill rides first while queues are short, Single Rider lines if the visitor
 > accepts riding apart, each wait tagged with the number of days of data behind it.
+>
+> *"On hésite entre plusieurs jours en décembre, quel jour venir ?"* → `get_crowd_calendar` →
+> expected crowd level of each day (history adjusted for the weekday and French school / public
+> holidays), the quietest days first.
+
+Plans can be added to a calendar (`.ics`), copied, or shared as a link that opens the plan
+read-only (the plan is compressed into the URL fragment: nothing is stored server-side).
 
 ## Architecture
 
@@ -51,6 +58,8 @@ flowchart LR
     T5["search_park_guide"]
     T6["list_rides"]
     T7["plan_day<br/>(optimizer)"]
+    T8["get_park_hours"]
+    T9["get_crowd_calendar"]
   end
 
   QT --> T1
@@ -58,7 +67,10 @@ flowchart LR
   T1 & T2 --> T3
   OM[("Open-Meteo")] --> T4
   KB["knowledge/*.md<br/>FastEmbed + Chroma"] --> T5
-  DB & T4 & T6 --> T7
+  TPW[("ThemeParks.wiki")] --> T8
+  DB & T4 & T6 & T8 & T1 --> T7
+  HOL[("French holidays<br/>open data")] --> T9
+  DB & T8 --> T9
 
   tools --> AGENT["LangGraph agent"]
   tools --> MCP["MCP server (stdio)"]
@@ -95,7 +107,19 @@ flowchart LR
   thrill ride for a thrill seeker; minutes = expected wait at that hour + walk + ride), favours
   rides that are cheap now but will get worse, keeps indoor rides for the rainy hours, uses
   Single Rider lines when allowed and leaves out rides not seen open recently (probably closed).
+  It plans inside the **official opening hours** (and the Extra Magic Hours for Disney hotel
+  guests) and schedules rides around fixed shows: today's real parade and night show times,
+  or the castle show shortly before closing for a future date. Beyond the published schedule
+  (about a month), hours are estimated from the history and the plan says so. Rides closed
+  that day in their own official schedule (refurbishment) are left out, with their reopening
+  date. For today, the next hour uses the **live waits** and later waits are the usual ones
+  scaled by how busy today is (median live / usual ratio).
   The LLM only explains the plan.
+- **Seasonality without a black box.** A queue in July is not a queue in November. MongoDB
+  returns one average per ride and per day; Python then weights each day by how close it is to
+  the visit date and to the same period of previous years (two half-lives, 30 and 15 days).
+  The crowd calendar is a three-factor model (season level x weekday effect x holiday effect)
+  whose effects are shrunk toward 1 when they rest on few days: every level can be explained.
 - **A closed list of rides.** `list_rides` is the official catalogue (ids and names from
   Queue-Times, curated attributes: land, indoor, thrill level, Single Rider). The agent may only
   cite these rides, and an eval check fails if a plan names anything else.
@@ -130,6 +154,8 @@ Hard constraint: **100 % free**, and the project must survive the limits of ever
 | **cron-job.org** | Punctual scheduler | Free | Triggers the collector every 15 min and pings the API every 10 min |
 | **Queue-Times** | Live wait times | Free, attribution required | Cached 5 min (its own refresh rate) |
 | **Open-Meteo** | Hourly weather | Free for non-commercial use, no key | Cached 1 h; forecasts up to 15 days ahead, a clear message beyond |
+| **ThemeParks.wiki** | Official opening hours, Extra Magic Hours, show times, ride closures | Free, no key | Park schedule cached 6 h (published about a month ahead); one schedule per ride (about 50 requests, in parallel) cached 12 h and fetched at startup; show times cached 15 min, today only |
+| **data.education.gouv.fr, calendrier.api.gouv.fr** | French school holidays (zones A, B, C) and public holidays | Free, official open data | Fetched once a day, grouped server-side (about 40 rows for two years) |
 | **FastEmbed + Chroma** | RAG | Runs locally: no API, no quota | Index rebuilt at startup (45 sections, < 1 s): no persistent disk needed |
 | **Langfuse** | LLM tracing (optional) | Free cloud plan | Enabled only when the keys are set; the app works without it |
 | **Grafana Cloud** | Metrics dashboard | Free tier | Scrapes `/metrics/prometheus` (a few dozen series); the scrape also keeps Render awake |
@@ -147,7 +173,7 @@ app/
   config.py         settings (pydantic-settings), park IDs, Paris timezone
   clock.py          single source of "now" (frozen in tests and evals)
   llm.py            LLM providers, fallback router, retry-after handling
-  tools/            the 7 tools, defined once (agent + MCP), incl. ride catalogue and planner
+  tools/            the 9 tools, defined once (agent + MCP), incl. ride catalogue and planner
   rag/              markdown chunking by section, FastEmbed + Chroma index
   agent/            LangGraph graph, prompts, terminal CLI
   api/              FastAPI app, rate limits, chat page (static/index.html)
@@ -250,18 +276,22 @@ that is not in the guide). Each case sets:
 The judge is **another model** (`gpt-oss-20b`) than the agent (`gpt-oss-120b`), to avoid a model
 grading itself. Cases hit by the free LLM quota are reported apart, not counted as agent failures.
 
-**Baseline run**, before the planning improvements:
+**Before / after** the planning improvements (catalogue, `plan_day` optimizer, prompt fixes):
 
-| Category | Pass rate |
-|---|---|
-| robustness | 100 % |
-| mode | 100 % |
-| tool_choice | 96 % |
-| **no_hallucination** | **100 %** |
-| transparency | 67 % |
-| content | 75 % |
-| language | 100 % |
-| planning_quality | 50 % (average 2.94 / 5) |
+| | Baseline | After: full run | After: failed cases fixed and re-run |
+|---|---|---|---|
+| Cases fully passed | 11 / 18 | 12 / 19 | **19 / 19** |
+| Checks passed | 93 % | 93 % | 100 % on the re-run cases |
+| no_hallucination | 100 % | 93 % (2 harness false positives, fixed) | 100 % |
+| LLM judge (planning) | 2.94 / 5 | **4.16 / 5** | all plans above the 3.5 threshold |
+
+The last column combines the full run with a re-run of the 7 cases that failed (the free LLM
+quota does not allow several full runs a day). Of those 7 failures, 3 were harness bugs
+(typographic hyphens, a missing fixture) and 4 real agent defects: steps dropped from the
+computed plan, no optimizer call for a two-park day, "no data" answered without querying the
+history (the model thought `get_typical_wait` needed one call per ride: fixed in the tool's
+description, which is what the model reads when choosing a tool), and a missing "no weather
+forecast" warning.
 
 The evals already paid off: they caught a **production bug** (the model called
 `get_weather(date=...)` while the parameter was named `day`; Groq rejected the call and the agent
@@ -302,7 +332,7 @@ or the evals; the report is published in the job summary.
 
 ## MCP
 
-The agent's 7 tools are also exposed as an [MCP](https://modelcontextprotocol.io) server
+The agent's 9 tools are also exposed as an [MCP](https://modelcontextprotocol.io) server
 (stdio transport), built with the official `mcp` Python SDK (its high-level API, FastMCP, is
 called `MCPServer` since v2). The functions are the same ones the LangGraph agent uses, imported
 from `app.tools`: they are defined once.
@@ -313,9 +343,11 @@ from `app.tools`: they are defined once.
 | `get_typical_wait(ride?, weekday?, hour?, park?)` | average / median wait, observations and days of history |
 | `compare_live_vs_typical(park)` | live wait vs usual wait at this weekday and hour (previous days only) |
 | `get_weather(date)` | hourly forecast at the resort, rainy hours (Open-Meteo, cached 1 h) |
+| `get_park_hours(park, date)` | official opening hours, Extra Magic Hours, ticketed events, rides closed that day with their reopening date; today's show, parade and night show times (ThemeParks.wiki) |
+| `get_crowd_calendar(park, start?, end?)` | expected crowd level of each day (low to very busy), the quietest days, the reasons (weekend, school holidays and zones, public holiday) and the official hours |
 | `search_park_guide(query, k?)` | relevant passages of the visit guide (RAG) |
 | `list_rides(park)` | the official ride catalogue: land, indoor, thrill level, Single Rider |
-| `plan_day(park, date, start?, end?, preference?, single_rider?)` | an optimized, timed day plan (most rides, least waiting) |
+| `plan_day(park, date, start?, end?, preference?, single_rider?, extra_magic_hours?)` | an optimized, timed day plan (most rides, least waiting) within the official hours and around the shows; today, from the live waits |
 
 Every tool is read-only. Failures (API down, date out of range, invalid argument) come back as
 MCP error results (`isError: true`) with a readable reason, never as a crash.
@@ -370,7 +402,7 @@ npx @modelcontextprotocol/inspector uv run python -m mcp_server.server
 | Workflow | Trigger | What it does |
 |---|---|---|
 | `ci.yml` | every push and PR | `ruff check`, `pytest`; `terraform fmt` + `validate`; then builds the Docker image and runs it with the free-tier constraints (port from `$PORT`, **512 MB memory limit**): fails if the app does not start or runs out of memory |
-| `collect.yml` | cron-job.org every 15 min (+ GitHub schedule as backup) | collects wait times into MongoDB, then pings the API so it stays awake |
+| `collect.yml` | cron-job.org every 15 min (+ GitHub schedule as backup) | collects wait times into MongoDB, pings the API so it stays awake, and once a day re-enables itself through the API (GitHub disables scheduled workflows after 60 days without a commit) |
 | `evals.yml` | manual, and PRs touching the agent, tools, RAG or evals | runs the golden set against the real LLM, report in the job summary |
 
 Render builds the `Dockerfile` (non-root user, locked dependencies, embedding model downloaded at
@@ -388,21 +420,27 @@ on the cluster and no password rotation on the app user.
 - **Short history.** The collector started in September 2026: usual waits become reliable as
   weeks of data accumulate. The agent says how many days each estimate relies on, and falls back
   on the guide when there is no data.
-- **Unofficial data.** Wait times come from Queue-Times.com, not from the parks. Opening hours,
-  parade and show times are not in any data source: the agent tells visitors to check them in the
-  official app.
+- **Unofficial data.** Wait times come from Queue-Times.com, not from the parks. Official hours
+  and ride schedules come from ThemeParks.wiki (about a month ahead); show and parade times are
+  only published on the day, so a plan for a later date says to check them in the official app.
+- **Crowd calendar.** Only French holidays are modelled (no UK / Belgian / Dutch holidays yet),
+  and the levels rank days against the history collected so far: with a few months of data,
+  they are indicative.
 - **Behaviour rules live partly in the prompt**, so they are not guaranteed: that is why the
   critical ones are also enforced in code (tool filtering per mode) and measured by the evals.
 - **Free tiers.** 8,000 tokens per minute on Groq limits concurrent chats (the fallback model
   absorbs peaks); Render sleeps when idle and cold-starts in about a minute; conversations are
   kept in memory, in a single process, and lost on restart.
-- **Evals are small** (19 cases) and LLM output varies between runs: several runs are needed for
+- **Evals are small** (21 cases) and LLM output varies between runs: several runs are needed for
   a solid comparison.
 - The GitHub API version used by the external trigger is scheduled for sunset in March 2028.
 
 ---
 
 Powered by [Queue-Times.com](https://queue-times.com/) · Weather data by
-[Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0).
+[Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0) · Opening hours by
+[ThemeParks.wiki](https://themeparks.wiki/) · French holidays from
+[data.education.gouv.fr](https://data.education.gouv.fr/) and
+[api.gouv.fr](https://calendrier.api.gouv.fr/) (Licence Ouverte).
 Independent project, not affiliated with or endorsed by Disneyland Paris; ride and park names are
 used only to describe the data.

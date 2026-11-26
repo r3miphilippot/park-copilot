@@ -107,14 +107,21 @@ def _authorized(request: Request, token: str) -> bool:
 
 
 def _warmup() -> None:
-    """Pay the slow first calls (embedding model load, MongoDB TLS handshake) at startup,
-    not during a visitor's first question."""
+    """Pay the slow first calls (embedding model load, MongoDB TLS handshake, the official
+    schedules of every ride, the holidays) at startup, not during a visitor's question."""
+    from app.clock import now_paris
+    from app.config import PARKS
+    from app.holidays import days_off
     from app.rag.index import get_guide_index
     from app.tools.history import get_history_store
+    from app.tools.park_hours import published_schedule, ride_operating_days
 
     for name, step in [
         ("guide index", get_guide_index),
         ("mongodb", lambda: get_history_store().coverage()),
+        ("park schedules", lambda: [published_schedule(p) for p in PARKS]),
+        ("ride schedules", lambda: [ride_operating_days(p) for p in PARKS]),
+        ("holidays", lambda: days_off(now_paris().date())),
     ]:
         try:
             step()

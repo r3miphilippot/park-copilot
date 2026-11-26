@@ -1,0 +1,165 @@
+{
+  "park": "disneyland_park",
+  "park_name": "Disneyland Park",
+  "days": [
+    {
+      "date": "2026-12-14",
+      "weekday": "Monday",
+      "level": "low",
+      "expected_wait": 20.9,
+      "reasons": [
+        "Monday"
+      ],
+      "hours": "09:00-22:00"
+    },
+    {
+      "date": "2026-12-15",
+      "weekday": "Tuesday",
+      "level": "low",
+      "expected_wait": 20.9,
+      "reasons": [
+        "Tuesday"
+      ],
+      "hours": "09:00-22:00"
+    },
+    {
+      "date": "2026-12-16",
+      "weekday": "Wednesday",
+      "level": "low",
+      "expected_wait": 20.9,
+      "reasons": [
+        "Wednesday"
+      ],
+      "hours": "09:00-22:00"
+    },
+    {
+      "date": "2026-12-17",
+      "weekday": "Thursday",
+      "level": "moderate",
+      "expected_wait": 21.0,
+      "reasons": [
+        "Thursday"
+      ],
+      "hours": "09:00-22:00"
+    },
+    {
+      "date": "2026-12-18",
+      "weekday": "Friday",
+      "level": "moderate",
+      "expected_wait": 21.0,
+      "reasons": [
+        "Friday"
+      ],
+      "hours": "09:00-21:00"
+    },
+    {
+      "date": "2026-12-19",
+      "weekday": "Saturday",
+      "level": "very_busy",
+      "expected_wait": 37.2,
+      "reasons": [
+        "Saturday",
+        "French school holidays (Vacances de Noël), zones A, B, C"
+      ],
+      "hours": "09:00-22:00"
+    },
+    {
+      "date": "2026-12-20",
+      "weekday": "Sunday",
+      "level": "very_busy",
+      "expected_wait": 37.2,
+      "reasons": [
+        "Sunday",
+        "French school holidays (Vacances de Noël), zones A, B, C"
+      ],
+      "hours": "09:00-22:00"
+    },
+    {
+      "date": "2026-12-21",
+      "weekday": "Monday",
+      "level": "busy",
+      "expected_wait": 28.4,
+      "reasons": [
+        "Monday",
+        "French school holidays (Vacances de Noël), zones A, B, C"
+      ],
+      "hours": "09:00-22:00"
+    },
+    {
+      "date": "2026-12-22",
+      "weekday": "Tuesday",
+      "level": "busy",
+      "expected_wait": 28.4,
+      "reasons": [
+        "Tuesday",
+        "French school holidays (Vacances de Noël), zones A, B, C"
+      ],
+      "hours": "09:00-22:00"
+    },
+    {
+      "date": "2026-12-23",
+      "weekday": "Wednesday",
+      "level": "busy",
+      "expected_wait": 28.4,
+      "reasons": [
+        "Wednesday",
+        "French school holidays (Vacances de Noël), zones A, B, C"
+      ],
+      "hours": "09:00-22:00"
+    },
+    {
+      "date": "2026-12-24",
+      "weekday": "Thursday",
+      "level": "very_busy",
+      "expected_wait": 28.5,
+      "reasons": [
+        "Thursday",
+        "French school holidays (Vacances de Noël), zones A, B, C"
+      ],
+      "hours": "09:00-22:00"
+    },
+    {
+      "date": "2026-12-25",
+      "weekday": "Friday",
+      "level": "very_busy",
+      "expected_wait": 28.5,
+      "reasons": [
+        "Friday",
+        "French school holidays (Vacances de Noël), zones A, B, C",
+        "French public holiday (Jour de Noël)"
+      ],
+      "hours": "09:00-22:00"
+    },
+    {
+      "date": "2026-12-26",
+      "weekday": "Saturday",
+      "level": "very_busy",
+      "expected_wait": 37.2,
+      "reasons": [
+        "Saturday",
+        "French school holidays (Vacances de Noël), zones A, B, C"
+      ],
+      "hours": "09:00-22:00"
+    },
+    {
+      "date": "2026-12-27",
+      "weekday": "Sunday",
+      "level": "very_busy",
+      "expected_wait": 37.2,
+      "reasons": [
+        "Sunday",
+        "French school holidays (Vacances de Noël), zones A, B, C"
+      ],
+      "hours": "09:00-22:00"
+    }
+  ],
+  "best_days": [
+    "2026-12-14",
+    "2026-12-15",
+    "2026-12-16"
+  ],
+  "days_of_data": 59,
+  "method": "expected average wait of the popular rides (11:00-18:00), from the wait history adjusted for the weekday and French school / public holidays",
+  "note": "Crowd levels rest on 59 days of history: indicative only.",
+  "source": "Queue-Times.com history; holidays: data.education.gouv.fr, calendrier.api.gouv.fr"
+}
