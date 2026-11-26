@@ -19,6 +19,8 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 PARIS_TZ = ZoneInfo("Europe/Paris")
 
 QUEUE_TIMES_BASE_URL = "https://queue-times.com"
+# Official opening hours, Extra Magic Hours and show times (free, no API key).
+THEMEPARKS_BASE_URL = "https://api.themeparks.wiki/v1"
 
 BASE_DIR = Path(__file__).resolve().parent.parent  # repository root
 
@@ -28,15 +30,21 @@ class Park:
     key: str  # stable slug stored in MongoDB and used as tool argument
     queue_times_id: int
     name: str
+    themeparks_id: str  # ThemeParks.wiki entity id (official schedule and show times)
 
 
 # Type used by tool arguments: the LLM can only pass one of these values.
 ParkKey = Literal["disneyland_park", "adventure_world"]
 
-# IDs taken from https://queue-times.com/parks.json (group "Walt Disney Attractions").
+# IDs taken from https://queue-times.com/parks.json (group "Walt Disney Attractions") and
+# https://api.themeparks.wiki/v1/destinations ("Disneyland Paris").
 PARKS: dict[str, Park] = {
-    "disneyland_park": Park("disneyland_park", 4, "Disneyland Park"),
-    "adventure_world": Park("adventure_world", 28, "Disney Adventure World"),
+    "disneyland_park": Park(
+        "disneyland_park", 4, "Disneyland Park", "dae968d5-630d-4719-8b06-3d107e944401"
+    ),
+    "adventure_world": Park(
+        "adventure_world", 28, "Disney Adventure World", "ca888437-ebb4-4d50-aed2-d227f7096968"
+    ),
 }
 
 

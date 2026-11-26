@@ -26,7 +26,7 @@ import time
 import typing
 from collections import defaultdict
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -40,7 +40,7 @@ from app.agent.graph import UNAVAILABLE_MESSAGES, build_graph
 from app.clock import frozen_now
 from app.config import PARIS_TZ, get_settings
 from app.llm import LLMRouter, make_provider
-from app.tools import TOOLS, ToolError, get_weather
+from app.tools import TOOLS, ToolError, get_live_wait_times, get_park_hours, get_weather
 from app.tools.history import HourlyProfile
 from evals.checks import Check, Transcript, run_checks
 
@@ -48,6 +48,7 @@ EVALS_DIR = Path(__file__).parent
 FIXTURES_DIR = EVALS_DIR / "fixtures"
 LIVE_TOOLS_WITH_FIXTURES = {
     "get_live_wait_times", "get_typical_wait", "compare_live_vs_typical", "get_weather",
+    "get_park_hours", "get_crowd_calendar",
 }  # fmt: skip
 JUDGE_MODEL = "openai/gpt-oss-20b"  # another model than the agent's: no self-grading
 JUDGE_PASS = 3.5
@@ -174,7 +175,9 @@ class FixtureHistoryStore:
     def __init__(self, refs: dict[str, str] | None) -> None:
         self.refs = refs or {}
 
-    def hourly_profile(self, *, park: str, weekday: int | None) -> HourlyProfile:
+    def hourly_profile(
+        self, *, park: str, weekday: int | None, target: date | None = None
+    ) -> HourlyProfile:
         ref = self.refs.get(park)
         if ref is None:
             return HourlyProfile(park=park, basis="none", days=0, waits={})
@@ -184,12 +187,17 @@ class FixtureHistoryStore:
 
 @contextmanager
 def planner_on_fixtures(case_fixtures: dict[str, Any]):
-    """plan_day runs for real (it is what we evaluate) but reads frozen history and weather."""
+    """plan_day runs for real (it is what we evaluate) but reads frozen history, weather,
+    opening hours and live waits (no fixture: unavailable, the planner does without)."""
     weather = fixture_tool(get_weather, case_fixtures)
+    hours = fixture_tool(get_park_hours, case_fixtures)
+    live = fixture_tool(get_live_wait_times, case_fixtures)
     store = FixtureHistoryStore(case_fixtures.get("hourly_profile"))
     with (
         patch("app.tools.planner.get_history_store", lambda: store),
         patch("app.tools.planner.get_weather", lambda date: weather(date=date)),
+        patch("app.tools.planner.get_park_hours", hours),
+        patch("app.tools.planner.get_live_wait_times", live),
     ):
         yield
 

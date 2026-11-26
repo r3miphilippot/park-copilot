@@ -1,4 +1,4 @@
-"""MCP server exposing the agent's 5 tools (stdio transport).
+"""MCP server exposing the agent's tools (stdio transport).
 
     uv run python -m mcp_server.server
 
@@ -23,12 +23,17 @@ from mcp.types import ToolAnnotations
 from app.tools import TOOLS, ToolError
 
 INSTRUCTIONS = """Tools to plan a day at Disneyland Paris (Disneyland Park and Disney Adventure
-World): live and usual wait times, live-vs-usual comparison, hourly weather, and a visit guide.
+World): live and usual wait times, live-vs-usual comparison, hourly weather, official opening
+hours, ride closures and show times, a crowd calendar, a ride catalogue, a day planner and a
+visit guide.
 - Parks: "disneyland_park" or "adventure_world". weekday: 0=Monday ... 6=Sunday. Hours are
   Paris time.
-- Live waits only make sense today; to plan a future date use get_typical_wait + get_weather.
-- Never invent a wait time, and say how many days of history an estimate relies on.
-Wait times: Queue-Times.com (unofficial). Weather: Open-Meteo.com."""
+- Live waits only make sense today; to plan a future date use plan_day, or get_typical_wait
+  + get_weather + get_park_hours.
+- Never invent a wait time or an opening / show time, and say how many days of history an
+  estimate relies on.
+Wait times: Queue-Times.com (unofficial). Weather: Open-Meteo.com. Hours: ThemeParks.wiki.
+Holidays: data.education.gouv.fr and calendrier.api.gouv.fr."""
 
 # Human-friendly titles; every tool only reads data (readOnlyHint), and all but the guide
 # call external services (openWorldHint).
@@ -37,7 +42,11 @@ TITLES = {
     "get_typical_wait": "Usual wait times (history)",
     "compare_live_vs_typical": "Live vs usual wait times",
     "get_weather": "Hourly weather forecast",
+    "get_park_hours": "Official opening hours, closures and show times",
+    "get_crowd_calendar": "Crowd calendar (which day to come)",
     "search_park_guide": "Search the visit guide",
+    "list_rides": "Ride catalogue",
+    "plan_day": "Optimized day plan",
 }
 
 

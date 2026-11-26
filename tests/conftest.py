@@ -2,7 +2,8 @@ from datetime import date
 
 import pytest
 
-from app.tools import history, live, weather
+from app import holidays
+from app.tools import history, live, park_hours, weather
 from app.tools.history import DataCoverage, HourlyProfile, RideStats
 
 
@@ -10,6 +11,10 @@ from app.tools.history import DataCoverage, HourlyProfile, RideStats
 def _clear_tool_caches():
     live._cache.clear()
     weather._cache.clear()
+    park_hours._schedule_cache.clear()
+    park_hours._shows_cache.clear()
+    park_hours._rides_cache.clear()
+    holidays._cache.clear()
     yield
 
 
@@ -23,11 +28,13 @@ class FakeHistoryStore:
         *,
         missing_weekdays: set[int] = frozenset(),
         profile: HourlyProfile | None = None,
+        daily: dict[date, float] | None = None,
     ) -> None:
         self.stats = stats
         self.days = days
         self.missing_weekdays = missing_weekdays  # weekdays without any data yet
         self.profile = profile
+        self.daily = daily or {}  # crowd index per day
         self.calls: list[dict] = []
 
     def ride_stats(self, **filters) -> list[RideStats]:
@@ -37,9 +44,15 @@ class FakeHistoryStore:
         ride = (filters.get("ride") or "").lower()
         return [s for s in self.stats if ride in s.ride.lower()]
 
-    def hourly_profile(self, *, park: str, weekday: int | None) -> HourlyProfile:
-        self.calls.append({"profile": park, "weekday": weekday})
+    def hourly_profile(
+        self, *, park: str, weekday: int | None, target: date | None = None
+    ) -> HourlyProfile:
+        self.calls.append({"profile": park, "weekday": weekday, "target": target})
         return self.profile or HourlyProfile(park=park, basis="none", days=0, waits={})
+
+    def daily_index(self, *, park: str, ride_ids: list[int]) -> dict[date, float]:
+        self.calls.append({"daily_index": park})
+        return dict(self.daily)
 
     def coverage(self) -> DataCoverage:
         if not self.days:
@@ -62,6 +75,7 @@ def use_store(monkeypatch):
         monkeypatch.setattr(history, "get_history_store", lambda: store)
         monkeypatch.setattr("app.tools.compare.get_history_store", lambda: store)
         monkeypatch.setattr("app.tools.planner.get_history_store", lambda: store)
+        monkeypatch.setattr("app.tools.crowds.get_history_store", lambda: store)
         return store
 
     return install

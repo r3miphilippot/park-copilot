@@ -7,11 +7,14 @@ from app.clock import frozen_now
 from app.config import PARIS_TZ
 from app.tools import ToolError, get_typical_wait, list_rides, plan_day
 from app.tools.history import HourlyProfile
+from app.tools.live import LiveWaitTimes, RideLiveWait
+from app.tools.park_hours import Closure, ParkHours, Show
 from app.tools.rides import CATALOG, RIDES_BY_ID
 from tests.conftest import FakeHistoryStore, stats
 
 TUESDAY_1030 = datetime(2026, 7, 14, 10, 30, tzinfo=PARIS_TZ)
 SATURDAY = date(2026, 7, 18)
+TODAY_1030 = datetime(2026, 7, 18, 10, 30, tzinfo=PARIS_TZ)  # the Saturday itself
 BASE_WAIT = {"headliner": 50, "popular": 30, "standard": 12}
 
 
@@ -35,17 +38,40 @@ def profile(park="disneyland_park", *, hours=range(9, 23), skip=(), basis="same_
 
 @pytest.fixture
 def plan(use_store, monkeypatch):
-    """plan_day with a frozen date, a fake history and a stubbed weather forecast."""
+    """plan_day with a frozen date, a fake history and stubbed weather, opening hours
+    (hours=None: not published, the planner estimates them) and live waits (live=None:
+    unavailable)."""
 
-    def run(*, store_profile=None, rainy_hours=(), **kwargs):
+    def run(*, store_profile=None, rainy_hours=(), hours=None, live=None, now=TUESDAY_1030,
+            **kwargs):  # fmt: skip
         use_store(FakeHistoryStore([], profile=store_profile))
         forecast = SimpleNamespace(rainy_hours=list(rainy_hours))
         monkeypatch.setattr("app.tools.planner.get_weather", lambda _date: forecast)
+        unpublished = ToolError(tool="get_park_hours", error="not published yet")
+        monkeypatch.setattr("app.tools.planner.get_park_hours", lambda **_: hours or unpublished)
+        no_live = ToolError(tool="get_live_wait_times", error="unavailable")
+        monkeypatch.setattr("app.tools.planner.get_live_wait_times", lambda **_: live or no_live)
         args = {"park": "disneyland_park", "date": SATURDAY, "start": "08:30"} | kwargs
-        with frozen_now(TUESDAY_1030):
+        with frozen_now(now):
             return plan_day(**args)
 
     return run
+
+
+def official(opening="09:30", closing="19:00", emh="08:30-09:30", shows=None, closed=()):
+    return ParkHours(
+        park="disneyland_park", park_name="Disneyland Park", date=SATURDAY, is_open=True,
+        opening=opening, closing=closing, extra_magic_hours=emh, shows=shows,
+        closed_rides=list(closed),
+    )  # fmt: skip
+
+
+def live_waits(waits: dict[int, int | None]) -> LiveWaitTimes:
+    """Live snapshot: ride_id -> wait (None = closed right now)."""
+    rides = [RideLiveWait(ride=f"ride {i}", ride_id=i, land=None, is_open=w is not None,
+                          wait_time=w) for i, w in waits.items()]  # fmt: skip
+    return LiveWaitTimes(park="disneyland_park", park_name="Disneyland Park",
+                         fetched_at=TODAY_1030, park_open=True, rides=rides)  # fmt: skip
 
 
 def rides_of(result):
@@ -159,3 +185,138 @@ def test_afternoon_start_has_no_lunch(plan):
 def test_past_date_is_refused(plan):
     result = plan(store_profile=profile(), date=date(2026, 7, 1))
     assert isinstance(result, ToolError) and "past" in result.error
+
+
+# --------------------------------------------------------------------------- opening hours
+
+
+def test_official_hours_are_respected(plan):
+    # A winter weekday: 19:00 closing. The history (summer) has waits until 23:00.
+    result = plan(store_profile=profile(), hours=official())
+    assert result.hours_source == "official" and result.park_hours == "09:30-19:00"
+    assert result.steps[0].note == "Park opens at 09:30."
+    assert rides_of(result)[0].time >= "09:30"  # no ride before opening for regular guests
+    assert all(s.time < "19:00" for s in result.steps)
+    # No published show time: the castle show shortly before closing, and nothing after it.
+    assert result.steps[-1].kind == "show" and result.steps[-1].time == "18:30"
+    assert "Dinner" not in [s.title for s in result.steps]  # the park closes before 20:30
+    assert any("Official opening hours: 09:30-19:00" in n for n in result.notes)
+
+
+def test_estimated_hours_ignore_extra_magic_hours(plan):
+    # At 8:00 only a handful of rides run (Extra Magic Hours): the park opens at 9:00.
+    history = profile()
+    for ride_id in list(history.waits)[:3]:
+        history.waits[ride_id][8] = 5.0
+    result = plan(store_profile=history)
+    assert result.hours_source == "estimated" and result.start == "09:00"
+    assert any("estimated from the history" in n for n in result.notes)
+
+
+def test_extra_magic_hours_only_plan_rides_running_early(plan):
+    history = profile()
+    early_rides = [r.ride_id for r in CATALOG if r.park == "disneyland_park" and r.thrill == "high"]
+    for ride_id in early_rides[:2]:
+        history.waits[ride_id][8] = 5.0
+    result = plan(store_profile=history, hours=official(), extra_magic_hours=True, start="08:00")
+    assert result.extra_magic_hours and result.start == "08:30"
+    before_opening = [s for s in rides_of(result) if s.time < "09:30"]
+    assert before_opening
+    assert {s.title for s in before_opening} <= {RIDES_BY_ID[i].name for i in early_rides[:2]}
+
+
+def test_closed_park_is_reported(plan):
+    closed = ParkHours(park="disneyland_park", park_name="Disneyland Park", date=SATURDAY,
+                       is_open=False)  # fmt: skip
+    result = plan(store_profile=profile(), hours=closed)
+    assert isinstance(result, ToolError) and "closed" in result.error
+
+
+def test_today_plan_starts_now_and_fits_around_the_shows(plan):
+    today_1030 = datetime(2026, 7, 18, 10, 30, tzinfo=PARIS_TZ)
+    shows = [
+        Show(name="Disney Tales of Magic", kind="night_show", times=["18:35"]),
+        Show(name="Disney Stars on Parade", kind="parade", times=["14:20", "16:00"]),
+    ]
+    result = plan(store_profile=profile(), hours=official(shows=shows), now=today_1030,
+                  preference="family")  # fmt: skip
+    assert result.start == "10:30"
+    assert result.steps[0].kind == "ride"  # already in the park: no "arrival at 08:30"
+    shows_steps = [(s.time, s.title) for s in result.steps if s.kind == "show"]
+    assert shows_steps == [("16:00", "Parade: Disney Stars on Parade"),
+                           ("18:35", "Night show: Disney Tales of Magic")]  # fmt: skip
+    # No ride overlaps a show (spot found 15-20 min before, show length after).
+    for step in rides_of(result):
+        start = int(step.time[:2]) * 60 + int(step.time[3:])
+        end = start + (step.expected_wait or 0) + 8
+        assert end <= 15 * 60 + 45 or start >= 16 * 60 + 30
+        assert end <= 18 * 60 + 15
+    assert not any(s.title == "Night show at the castle" for s in result.steps)
+
+
+def test_parade_soon_after_an_afternoon_arrival_but_not_at_opening(plan):
+    shows = [Show(name="Disney Stars on Parade", kind="parade", times=["10:00", "16:00"])]
+    afternoon = datetime(2026, 7, 18, 15, 10, tzinfo=PARIS_TZ)
+    later = plan(store_profile=profile(), hours=official(shows=shows), now=afternoon)
+    assert [s.time for s in later.steps if s.kind == "show"] == ["16:00"]
+    # The 10:00 parade falls in the first hour after the 09:30 opening: rides first.
+    early = datetime(2026, 7, 18, 8, 0, tzinfo=PARIS_TZ)
+    morning = plan(store_profile=profile(), hours=official(shows=shows), now=early, end="12:00")
+    assert not [s for s in morning.steps if s.kind == "show"]
+
+
+def test_thrill_seekers_skip_the_parade(plan):
+    today_1030 = datetime(2026, 7, 18, 10, 30, tzinfo=PARIS_TZ)
+    shows = [Show(name="Disney Stars on Parade", kind="parade", times=["16:00"])]
+    result = plan(store_profile=profile(), hours=official(shows=shows), now=today_1030,
+                  preference="thrill")  # fmt: skip
+    assert not [s for s in result.steps if s.kind == "show"]
+
+
+# --------------------------------------------------------------------------- closures, live, season
+
+
+def test_rides_closed_that_day_are_not_planned(plan):
+    closed = [Closure(ride="Big Thunder Mountain", reopens=date(2026, 7, 20)),
+              Closure(ride="Phantom Manor")]  # fmt: skip
+    result = plan(store_profile=profile(), hours=official(closed=closed), preference="thrill")
+    titles = [s.title for s in rides_of(result)]
+    assert "Big Thunder Mountain" not in titles and "Phantom Manor" not in titles
+    [note] = [n for n in result.notes if "official schedule, not planned" in n]
+    assert "Big Thunder Mountain (reopens 2026-07-20)" in note
+    assert "Phantom Manor (no reopening date published)" in note
+
+
+def test_today_uses_live_waits_then_scales_the_history(plan):
+    history = profile()
+    big_thunder = next(r for r in CATALOG if r.name == "Big Thunder Mountain")
+    # Without the breakdown, the second ride of this plan (checked when writing the test).
+    indiana = next(r for r in CATALOG if r.name.startswith("Indiana Jones"))
+    usual_now = {r: by_hour[10] for r, by_hour in history.waits.items() if by_hour[10] >= 5}
+    busy = {r: round(w * 1.5) for r, w in usual_now.items()}  # today: +50 % everywhere
+    busy[big_thunder.ride_id], busy[indiana.ride_id] = 5, None  # short queue now; Indiana down
+    result = plan(store_profile=history, live=live_waits(busy), now=TODAY_1030,
+                  preference="thrill")  # fmt: skip
+
+    assert result.live_waits and result.today_vs_usual == 1.5
+    assert any("50 % busier than usual" in n for n in result.notes)
+    first = rides_of(result)[0]
+    assert first.title == "Big Thunder Mountain" and first.live_wait
+    assert first.expected_wait == 5  # the live wait, not the usual one
+    titles = [s.title for s in rides_of(result)]
+    first_hour = [s.title for s in rides_of(result) if s.time < "11:30"]
+    # Down right now: not in the next hour, but still planned later (it may reopen).
+    assert indiana.name not in first_hour and indiana.name in titles
+    later = [s for s in rides_of(result) if s.time >= "12:00" and s.expected_wait]
+    assert later and not any(s.live_wait for s in later)
+
+
+def test_no_live_waits_for_a_future_date(plan):
+    result = plan(store_profile=profile(), live=live_waits({25: 5}))
+    assert not result.live_waits and not any(s.live_wait for s in result.steps)
+
+
+def test_far_date_without_history_from_that_season_says_so(plan):
+    far = date(2026, 12, 19)  # five months after "now", history from the summer only
+    result = plan(store_profile=profile(), date=far)
+    assert any("No history yet from this time of year" in n for n in result.notes)

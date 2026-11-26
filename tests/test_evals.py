@@ -85,6 +85,14 @@ def test_full_day_plan_checks():
     assert [c.passed for c in check_content(transcript(short), spec)] == [False, False]
 
 
+def test_no_plan_step_after_closing():
+    closing = {"max_step_time": "19:00"}
+    [late] = check_content(transcript("09:30 – Big Thunder\n19:15 – Phantom Manor"), closing)
+    assert not late.passed and "19:15" in late.detail
+    [on_time] = check_content(transcript("9h30 – Big Thunder\n18:35 – Spectacle"), closing)
+    assert on_time.passed
+
+
 def test_known_rides_only():
     # Lines from a real answer that mixed in rides of other Disney parks.
     tester_answer = (
@@ -105,6 +113,8 @@ def test_known_rides_only():
     assert not bad.passed
     assert "jungle cruise" in bad.detail and "space mountain" in bad.detail
     assert check_known_rides(good_plan).passed  # "Hyperspace Mountain" is not "Space Mountain"
+    # LLMs write non-breaking hyphens (U+2011): still the same ride.
+    assert check_known_rides("10:15 – Blanche‑Neige et les Sept Nains (≈ 7 min)").passed
 
 
 def test_forbidden_mentions_and_patterns():
@@ -126,7 +136,8 @@ def test_every_fixture_matches_its_tool_model(path):
         )
         return
     prefix = {"typical": "get_typical_wait", "weather": "get_weather",
-              "compare": "compare_live_vs_typical", "live": "get_live_wait_times"}  # fmt: skip
+              "compare": "compare_live_vs_typical", "live": "get_live_wait_times",
+              "hours": "get_park_hours", "crowd": "get_crowd_calendar"}  # fmt: skip
     tool = TOOLS_BY_NAME[prefix[kind]]
     assert not isinstance(load_fixture(tool, path.stem), ToolError)
 
@@ -146,7 +157,8 @@ def test_golden_case_is_consistent(case):
 
 def test_golden_set_size_and_unique_ids():
     ids = [c["id"] for c in GOLDEN]
-    assert 15 <= len(ids) <= 20 and len(ids) == len(set(ids))
+    # A full run must fit in the free LLM quota (about 4 calls per case, plus the judge).
+    assert 15 <= len(ids) <= 22 and len(ids) == len(set(ids))
 
 
 def test_fixture_tool_keeps_schema_and_filters_rides():

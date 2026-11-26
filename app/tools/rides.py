@@ -102,7 +102,8 @@ class RideCatalog(BaseModel):
     rides: list[Ride]
     note: str = (
         "Official list: only cite these rides, in this park. thrill = sensations level; "
-        "single_rider_id set = a Single Rider line exists (shorter wait, the group rides apart)."
+        "single_rider_id set = a Single Rider line exists (shorter wait, the group rides apart). "
+        "No wait times here: call get_typical_wait for waits."
     )
 
 
@@ -111,7 +112,9 @@ def list_rides(park: ParkKey) -> RideCatalog | ToolError:
     """List the rides, shows and attractions of one park with their land, indoor/outdoor,
     thrill level (high / medium / low) and whether a Single Rider line exists.
 
-    This is the official list: never cite a ride that is not in it.
+    This is the official list: never cite a ride that is not in it. It contains NO wait
+    times: for "which rides have the shortest wait" use get_typical_wait (future dates) or
+    the live tools (now).
 
     Args:
         park: "disneyland_park" or "adventure_world".

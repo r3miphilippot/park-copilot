@@ -10,7 +10,8 @@ from datetime import UTC, datetime
 import pytest
 from pymongo import MongoClient
 
-from app.config import get_settings
+from app.clock import frozen_now
+from app.config import PARIS_TZ, get_settings
 from app.tools.history import MongoHistoryStore
 
 settings = get_settings()
@@ -66,8 +67,10 @@ def test_real_aggregation(collection):
     )
     store = MongoHistoryStore(collection)
 
-    [pirates] = store.ride_stats(park=None, ride="PIRATES", weekday=1, hour=10)
-    assert (pirates.avg_wait, pirates.median_wait) == (20.0, 20.0)
+    with frozen_now(datetime(2026, 7, 22, 10, 0, tzinfo=PARIS_TZ)):
+        [pirates] = store.ride_stats(park=None, ride="PIRATES", weekday=1, hour=10)
+    # Days weighted by recency: the latest Tuesday (30 min) counts a bit more than the first.
+    assert 20.0 < pirates.avg_wait < 22.0 and pirates.median_wait == 20.0
     assert (pirates.observations, pirates.days_observed) == (3, 3)
 
     coverage = store.coverage()

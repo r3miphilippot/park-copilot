@@ -45,6 +45,7 @@ WAIT_RE = re.compile(
 DAYS_RE = re.compile(r"(\d+)\s*(?:jours?|days?)\b", re.IGNORECASE)
 # A timed step of a plan: a line starting with "09:30", "9h30", "- 14:00", "**10:15**"...
 TIMED_STEP_RE = re.compile(r"^\W*\d{1,2}\s*[:h]\s*\d{2}\b", re.MULTILINE)
+STEP_TIME_RE = re.compile(r"^\W*(\d{1,2})\s*[:h]\s*(\d{2})\b", re.MULTILINE)
 EVENING_SHOW_WORDS = ["spectacle", "show", "nocturne", "feux d'artifice", "fireworks"]
 
 # Keywords identifying every ride of the catalogue (app/tools/rides.py), as an LLM writes them.
@@ -75,6 +76,7 @@ NO_HISTORY_WORDS = [
     "pas encore", "aucune donnée", "aucun historique", "pas d'historique", "pas de donnée",
     "pas assez", "insuffisant", "ne dispose pas", "je n'ai pas", "n'ai aucune",
     "no history", "no historical", "no data", "not enough", "don't have", "do not have",
+    "aucune donnée d'attente", "sans données", "without historical", "no wait history",
 ]  # fmt: skip
 UNAVAILABLE_WORDS = [
     "indisponible", "pas disponible", "n'est pas disponible", "ne sont pas disponibles",
@@ -139,6 +141,8 @@ def normalize(text: str) -> str:
     """LLMs write typographic characters: "20 minutes", "n’est". Compare plain text."""
     for fancy in (" ", " ", " "):
         text = text.replace(fancy, " ")
+    for hyphen in ("‐", "‑"):  # typographic and non-breaking hyphens: "Blanche‑Neige"
+        text = text.replace(hyphen, "-")
     return text.replace("’", "'").replace("‘", "'").lower()
 
 
@@ -205,8 +209,10 @@ def check_content(t: Transcript, checks_spec: dict) -> list[Check]:
     answer = t.answer
     if checks_spec.get("mentions_days_of_data"):
         days = days_values(t.tool_outputs)
-        written = {int(d) for d in DAYS_RE.findall(answer)}
+        written = {int(d) for d in DAYS_RE.findall(normalize(answer))}
         ok = bool(days & written)
+        if days == {0}:  # no history at all: saying so is the transparent answer
+            ok = ok or bool(_contains_any(answer, NO_HISTORY_WORDS))
         checks.append(
             Check(
                 "transparency", "says how many days of data", ok, f"tools {days}, answer {written}"
@@ -230,6 +236,13 @@ def check_content(t: Transcript, checks_spec: dict) -> list[Check]:
                 f"{steps} timed steps",
             )  # fmt: skip
         )
+    if latest := checks_spec.get("max_step_time"):
+        times = [f"{int(h):02d}:{m}" for h, m in STEP_TIME_RE.findall(answer)]
+        late = [t for t in times if t > latest]
+        checks.append(
+            Check("content", f"no step after {latest} (closing)", bool(times) and not late,
+                  f"steps after closing: {late}" if late else f"{len(times)} timed steps")
+        )  # fmt: skip
     if checks_spec.get("known_rides_only"):
         checks.append(check_known_rides(answer))
     if checks_spec.get("mentions_evening_show"):
