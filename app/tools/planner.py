@@ -95,7 +95,9 @@ class PlanStep(BaseModel):
     kind: Literal["ride", "meal", "show", "info"]
     title: str
     land: str | None = None
-    line: Literal["standby", "single_rider"] | None = None
+    # Set only for a Single Rider line: the regular line is the default, and a "standby"
+    # value was copied word for word into the answers.
+    line: Literal["single_rider"] | None = None
     expected_wait: int | None = None  # minutes, from history; None = no data for this ride
     live_wait: bool | None = None  # True: expected_wait is the current live wait
     thrill: str | None = None
@@ -560,7 +562,8 @@ def _schedule(candidates, waits, begin, finish, preference, single_rider, rainy,
         real, wait, line, walk, live = best_info
         steps.append(
             PlanStep(
-                time=_hhmm(now + walk), kind="ride", title=best.name, land=best.land, line=line,
+                time=_hhmm(now + walk), kind="ride", title=best.name, land=best.land,
+                line="single_rider" if line == "single_rider" else None,
                 expected_wait=round(real) if real is not None else None, thrill=best.thrill,
                 indoor=best.indoor, live_wait=live or None,
                 note=text("second_ride") if done.get(best.ride_id) else None,

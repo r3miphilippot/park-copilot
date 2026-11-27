@@ -140,7 +140,9 @@ def test_single_rider_line_is_used_when_shorter(plan):
     alone = plan(store_profile=profile(), preference="thrill", single_rider=True)
     group = plan(store_profile=profile(), preference="thrill", single_rider=False)
     assert any(s.line == "single_rider" for s in rides_of(alone))
-    assert not any(s.line == "single_rider" for s in rides_of(group))
+    # The regular line is not spelled out: models copied "standby" into the answers.
+    assert all(s.line is None for s in rides_of(group))
+    assert '"standby"' not in group.model_dump_json(exclude_none=True)
     assert alone.total_expected_wait / alone.rides_count < (
         group.total_expected_wait / group.rides_count
     )
